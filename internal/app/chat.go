@@ -318,13 +318,11 @@ func (m *Model) submitChat() tea.Cmd {
 	})
 	m.chat.Streaming = true
 	m.chat.StreamingSQL = true
-	m.chat.Messages = append(m.chat.Messages, chatMessage{
-		Role: roleNotice, Content: "generating query",
-	})
-	// Add an empty assistant message that we'll populate with SQL and later the answer.
-	m.chat.Messages = append(m.chat.Messages, chatMessage{
-		Role: roleAssistant, Content: "", SQL: "",
-	})
+	m.chat.Messages = append(m.chat.Messages,
+		chatMessage{Role: roleNotice, Content: "generating query"},
+		// Empty assistant message that we'll populate with SQL and later the answer.
+		chatMessage{Role: roleAssistant, Content: "", SQL: ""},
+	)
 	m.refreshChatViewport()
 
 	// Stage 1: Stream SQL generation.

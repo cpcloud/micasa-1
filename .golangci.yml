@@ -31,6 +31,7 @@ linters:
     - goconst
     - dupword
     - asciicheck
+    - revive
 
   settings:
     exhaustive:
@@ -40,10 +41,21 @@ linters:
       min-occurrences: 5
       ignore-tests: true
 
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+
     gocritic:
+      enable-all: true
+      disabled-tags:
+        - experimental
+        - opinionated
       disabled-checks:
-        - singleCaseSwitch
+        - hugeParam
+        - rangeValCopy
         - ifElseChain
+        - singleCaseSwitch
 
   exclusions:
     rules:
