@@ -134,9 +134,35 @@ func BenchmarkComputeTableViewport(b *testing.B) {
 	}
 }
 
+func BenchmarkComputeTableViewportPins(b *testing.B) {
+	m := benchModel(b)
+	tab := m.activeTab()
+	require.Greater(b, len(tab.CellRows), 0, "need data rows")
+	// Pin the first cell value in the first column.
+	pinVal := tab.CellRows[0][0].Value
+	tab.Pins = []filterPin{{Col: 0, Values: map[string]bool{pinVal: true}}}
+	sep := m.styles.TableSeparator.Render(" │ ")
+	b.ResetTimer()
+	for b.Loop() {
+		_ = computeTableViewport(tab, 120, sep, m.styles)
+	}
+}
+
 func BenchmarkTableView(b *testing.B) {
 	m := benchModel(b)
 	tab := m.activeTab()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = m.tableView(tab)
+	}
+}
+
+func BenchmarkTableViewPins(b *testing.B) {
+	m := benchModel(b)
+	tab := m.activeTab()
+	require.Greater(b, len(tab.CellRows), 0, "need data rows")
+	pinVal := tab.CellRows[0][0].Value
+	tab.Pins = []filterPin{{Col: 0, Values: map[string]bool{pinVal: true}}}
 	b.ResetTimer()
 	for b.Loop() {
 		_ = m.tableView(tab)

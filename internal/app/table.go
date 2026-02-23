@@ -146,9 +146,16 @@ func computeTableViewport(tab *Tab, termWidth int, normalSep string, styles Styl
 		return vp
 	}
 
-	// Compute natural widths once for visible columns, then reuse for both
-	// columnWidths calls below (avoids a duplicate O(rows*cols) measurement).
-	visNatural := naturalWidths(visSpecs, visCells)
+	// When pins are active, use unfiltered data for natural widths so that
+	// activating/deactivating a filter doesn't shift column widths.
+	// Compute once and reuse for both viewport-range and final sizing.
+	hasPins := len(tab.Pins) > 0 && len(tab.FullCellRows) > 0
+	var visNatural []int
+	if hasPins {
+		visNatural = naturalWidthsIndirect(visSpecs, tab.FullCellRows, visToFull)
+	} else {
+		visNatural = naturalWidths(visSpecs, visCells)
+	}
 
 	sepW := lipgloss.Width(normalSep)
 	fullWidths := columnWidths(visSpecs, visCells, termWidth, sepW, visNatural)
@@ -170,19 +177,12 @@ func computeTableViewport(tab *Tab, termWidth int, normalSep string, styles Styl
 	}
 	vp.VisToFull = vpVisToFull
 
-	// Use the full (unfiltered) cell rows when pins are active so that
-	// activating/deactivating a filter doesn't shift column widths or
-	// remove link arrows from headers.
 	fullCells := vp.Cells
-	natSlice := visNatural[start:end]
-	if len(tab.Pins) > 0 && len(tab.FullCellRows) > 0 {
+	if hasPins {
 		fullCells = projectCellRows(tab.FullCellRows, visToFull, start, end)
-		allFullCells := projectCellRows(tab.FullCellRows, visToFull, 0, len(visToFull))
-		fullNatural := naturalWidths(visSpecs, allFullCells)
-		natSlice = fullNatural[start:end]
 	}
 	vp.LinkCells = fullCells
-	vp.Widths = columnWidths(vp.Specs, fullCells, termWidth, sepW, natSlice)
+	vp.Widths = columnWidths(vp.Specs, fullCells, termWidth, sepW, visNatural[start:end])
 
 	// Per-gap separators need to match the viewport's projected columns.
 	vp.PlainSeps, vp.CollapsedSeps = gapSeparators(vpVisToFull, len(tab.Specs), normalSep, styles)
@@ -944,6 +944,45 @@ func naturalWidths(specs []columnSpec, rows [][]cell) []int {
 			w = spec.Min
 		}
 		widths[i] = w
+	}
+	return widths
+}
+
+// naturalWidthsIndirect computes natural widths using fullRows indexed
+// through visToFull, avoiding a temporary projected [][]cell allocation.
+func naturalWidthsIndirect(specs []columnSpec, fullRows [][]cell, visToFull []int) []int {
+	widths := make([]int, len(specs))
+	colCount := len(specs)
+	for vi, spec := range specs {
+		fi := visToFull[vi]
+		w := headerTitleWidth(spec, colCount)
+		for _, fv := range spec.FixedValues {
+			if fw := lipgloss.Width(fv); fw > w {
+				w = fw
+			}
+		}
+		for _, row := range fullRows {
+			if fi >= len(row) {
+				continue
+			}
+			value := firstLine(row[fi].Value)
+			if value == "" {
+				continue
+			}
+			cw := lipgloss.Width(value)
+			if spec.Kind == cellNotes {
+				if n := extraLineCount(row[fi].Value); n > 0 {
+					cw += 1 + 1 + noteSuffixWidth(n)
+				}
+			}
+			if cw > w {
+				w = cw
+			}
+		}
+		if w < spec.Min {
+			w = spec.Min
+		}
+		widths[vi] = w
 	}
 	return widths
 }

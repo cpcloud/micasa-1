@@ -1002,16 +1002,35 @@ func (m *Model) viewportPinContext(tab *Tab, vp tableViewport) pinRenderContext 
 // splices foreground lines into background lines) cannot permanently disrupt
 // the dim state.
 func dimBackground(s string) string {
-	dimmed := strings.ReplaceAll(s, "\033[0m", "\033[0;2m")
-	// Neutralize cancel-faint markers left by a previous cancelFaint pass
-	// (nested overlays). Without this, \033[22m codes embedded in an
-	// earlier overlay's content would override the dim we're applying.
-	dimmed = strings.ReplaceAll(dimmed, "\033[22m", "\033[2m")
-	lines := strings.Split(dimmed, "\n")
-	for i, line := range lines {
-		lines[i] = "\033[2m" + line
+	// Keep the vectorized ReplaceAll for escape-sequence substitution (fast
+	// SIMD path in the runtime), but avoid Split+Join for the per-line
+	// prefix by scanning for newlines with a Builder.
+	s = strings.ReplaceAll(s, "\033[0m", "\033[0;2m")
+	s = strings.ReplaceAll(s, "\033[22m", "\033[2m")
+	return prependLines(s, "\033[2m", "\033[0m")
+}
+
+// prependLines prepends prefix to every line in s and appends suffix to
+// the result, using a single Builder instead of Split+Join.
+func prependLines(s, prefix, suffix string) string {
+	n := strings.Count(s, "\n")
+	// Each line gets prefix; total overhead = (n+1)*len(prefix) + len(suffix).
+	var b strings.Builder
+	b.Grow(len(s) + (n+1)*len(prefix) + len(suffix))
+	b.WriteString(prefix)
+	for {
+		i := strings.IndexByte(s, '\n')
+		if i < 0 {
+			b.WriteString(s)
+			break
+		}
+		b.WriteString(s[:i])
+		b.WriteByte('\n')
+		b.WriteString(prefix)
+		s = s[i+1:]
 	}
-	return strings.Join(lines, "\n") + "\033[0m"
+	b.WriteString(suffix)
+	return b.String()
 }
 
 // cancelFaint wraps each line with ANSI "normal intensity" at the start and
@@ -1019,11 +1038,26 @@ func dimBackground(s string) string {
 // overlay content; the trailing \033[2m re-establishes dim for the right-side
 // background portion that follows the overlay in the composited output.
 func cancelFaint(s string) string {
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = "\033[22m" + line + "\033[2m"
+	n := strings.Count(s, "\n")
+	const pre = "\033[22m"
+	const suf = "\033[2m"
+	var b strings.Builder
+	b.Grow(len(s) + (n+1)*(len(pre)+len(suf)))
+	b.WriteString(pre)
+	for {
+		i := strings.IndexByte(s, '\n')
+		if i < 0 {
+			b.WriteString(s)
+			break
+		}
+		b.WriteString(s[:i])
+		b.WriteString(suf)
+		b.WriteByte('\n')
+		b.WriteString(pre)
+		s = s[i+1:]
 	}
-	return strings.Join(lines, "\n")
+	b.WriteString(suf)
+	return b.String()
 }
 
 // --- Keycap rendering ---
