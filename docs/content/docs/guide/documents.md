@@ -146,6 +146,7 @@ document always saves regardless of which tools are installed.
 | Fedora / RHEL | `sudo dnf install poppler-utils tesseract` |
 | Arch | `sudo pacman -S poppler tesseract` |
 | macOS (Homebrew) | `brew install poppler tesseract` |
+| Windows (MSYS2) | `pacman -S mingw-w64-x86_64-poppler mingw-w64-x86_64-tesseract-ocr` |
 | Nix | `nix shell 'nixpkgs#poppler-utils' 'nixpkgs#tesseract'` |
 
 The micasa dev shell (`nix develop`) includes both tools automatically.

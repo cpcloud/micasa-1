@@ -5,20 +5,19 @@ package extract
 
 import (
 	"os"
-	"runtime"
 	"testing"
 )
 
-// ciStrictOS returns true when running in CI on an OS where all
-// extraction tools (tesseract, pdftoppm, pdftotext, magick) are
-// expected to be installed. Currently that's Linux and macOS.
+// ciStrictOS returns true when running in CI where all extraction
+// tools (tesseract, pdftoppm, pdftotext, magick) are expected to be
+// installed. All three platforms now have poppler via native package
+// managers (apt on Linux, brew on macOS, MSYS2 pacman on Windows).
 func ciStrictOS() bool {
-	return os.Getenv("CI") != "" && runtime.GOOS != "windows"
+	return os.Getenv("CI") != ""
 }
 
 // skipOrFatalCI skips the test when tools/fixtures are missing
-// locally, but fails hard in CI on Linux/macOS where everything
-// should be available.
+// locally, but fails hard in CI where everything should be available.
 func skipOrFatalCI(t *testing.T, msg string) {
 	t.Helper()
 	if ciStrictOS() {

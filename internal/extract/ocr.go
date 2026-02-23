@@ -26,30 +26,14 @@ func ocrPDF(ctx context.Context, data []byte, maxPages int) (string, []byte, err
 	}
 	defer os.RemoveAll(tmpDir) //nolint:errcheck // best-effort cleanup
 
-	// Write PDF to temp file for pdftoppm.
 	pdfPath := filepath.Join(tmpDir, "input.pdf")
 	if err := os.WriteFile(pdfPath, data, 0o600); err != nil {
 		return "", nil, fmt.Errorf("write temp pdf: %w", err)
 	}
 
-	// Rasterize: pdftoppm -png -r 300 -l <maxPages> input.pdf output
 	outputPrefix := filepath.Join(tmpDir, "page")
-	args := []string{
-		"-png",
-		"-r", "300",
-		"-l", fmt.Sprintf("%d", maxPages),
-		pdfPath,
-		outputPrefix,
-	}
-	cmd := exec.CommandContext( //nolint:gosec // args are constructed internally, not user-supplied
-		ctx,
-		"pdftoppm",
-		args...,
-	)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", nil, fmt.Errorf("pdftoppm: %s: %w", strings.TrimSpace(stderr.String()), err)
+	if err := rasterize(ctx, pdfPath, outputPrefix, maxPages); err != nil {
+		return "", nil, fmt.Errorf("pdftoppm: %w", err)
 	}
 
 	// Collect page images in sorted order.

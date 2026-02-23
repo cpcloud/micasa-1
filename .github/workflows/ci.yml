@@ -49,16 +49,16 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install poppler tesseract imagemagick ghostscript
 
-      - name: Install extraction tools (Windows)
+      - name: Add MSYS2 to PATH (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          foreach ($attempt in 1..3) {
-            choco install tesseract imagemagick --no-progress -y
-            if ($LASTEXITCODE -eq 0) { break }
-            Write-Host "choco install attempt $attempt failed, retrying..."
-            Start-Sleep -Seconds 10
-          }
+          Add-Content $env:GITHUB_PATH "C:\msys64\usr\bin"
+          Add-Content $env:GITHUB_PATH "C:\msys64\mingw64\bin"
+
+      - name: Install extraction tools (Windows)
+        if: runner.os == 'Windows'
+        run: pacman -S --noconfirm mingw-w64-x86_64-poppler mingw-w64-x86_64-tesseract-ocr mingw-w64-x86_64-tesseract-data-eng mingw-w64-x86_64-imagemagick
 
       - name: Download dependencies
         run: go mod download
