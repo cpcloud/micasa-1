@@ -268,7 +268,8 @@ func (m *Model) submitChat() tea.Cmd {
 	// Record in history for up/down browsing, deduplicating consecutive repeats.
 	if len(m.chat.History) == 0 || m.chat.History[len(m.chat.History)-1] != query {
 		m.chat.History = append(m.chat.History, query)
-		// Persist to database for cross-session history.
+		// Best-effort: persist for cross-session history. Primary chat
+		// flow succeeds regardless of persistence failure.
 		if m.store != nil {
 			_ = m.store.AppendChatInput(query)
 		}
@@ -601,6 +602,7 @@ func (m *Model) cmdSwitchModel(name string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
+		// Best-effort: if listing fails, fall through to pull attempt.
 		models, _ := client.ListModels(ctx)
 		for _, model := range models {
 			if model == name || strings.HasPrefix(model, name+":") {

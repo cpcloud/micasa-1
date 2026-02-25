@@ -428,13 +428,16 @@ func (m *Model) openQuoteForm(values *quoteFormData, projectOpts []huh.Option[ui
 	m.activateForm(formQuote, form, values)
 }
 
-func (m *Model) startMaintenanceForm() {
+func (m *Model) startMaintenanceForm() error {
 	values := &maintenanceFormData{}
 	catOptions := maintenanceOptions(m.maintenanceCategories)
 	if len(catOptions) > 0 {
 		values.CategoryID = catOptions[0].Value
 	}
-	appliances, _ := m.store.ListAppliances(false)
+	appliances, err := m.store.ListAppliances(false)
+	if err != nil {
+		return fmt.Errorf("list appliances: %w", err)
+	}
 	appOpts := applianceOptions(appliances)
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -459,6 +462,7 @@ func (m *Model) startMaintenanceForm() {
 		),
 	)
 	m.activateForm(formMaintenance, form, values)
+	return nil
 }
 
 func (m *Model) startEditMaintenanceForm(id uint) error {
@@ -468,7 +472,10 @@ func (m *Model) startEditMaintenanceForm(id uint) error {
 	}
 	values := maintenanceFormValues(item)
 	options := maintenanceOptions(m.maintenanceCategories)
-	appliances, _ := m.store.ListAppliances(false)
+	appliances, err := m.store.ListAppliances(false)
+	if err != nil {
+		return fmt.Errorf("list appliances: %w", err)
+	}
 	appOpts := applianceOptions(appliances)
 	m.editID = &id
 	m.openMaintenanceForm(values, options, appOpts)
@@ -519,13 +526,16 @@ func (m *Model) openMaintenanceForm(
 	m.activateForm(formMaintenance, form, values)
 }
 
-func (m *Model) startIncidentForm() {
+func (m *Model) startIncidentForm() error {
 	values := &incidentFormData{
 		Status:      data.IncidentStatusOpen,
 		Severity:    data.IncidentSeveritySoon,
 		DateNoticed: time.Now().Format(data.DateLayout),
 	}
-	appliances, _ := m.store.ListAppliances(false)
+	appliances, err := m.store.ListAppliances(false)
+	if err != nil {
+		return fmt.Errorf("list appliances: %w", err)
+	}
 	appOpts := applianceOptions(appliances)
 	vendorOpts := optionalVendorOptions(m.vendors)
 	form := huh.NewForm(
@@ -559,6 +569,7 @@ func (m *Model) startIncidentForm() {
 		).Title("Links"),
 	)
 	m.activateForm(formIncident, form, values)
+	return nil
 }
 
 func (m *Model) startEditIncidentForm(id uint) error {
@@ -567,7 +578,10 @@ func (m *Model) startEditIncidentForm(id uint) error {
 		return fmt.Errorf("load incident: %w", err)
 	}
 	values := incidentFormValues(item)
-	appliances, _ := m.store.ListAppliances(false)
+	appliances, err := m.store.ListAppliances(false)
+	if err != nil {
+		return fmt.Errorf("list appliances: %w", err)
+	}
 	appOpts := applianceOptions(appliances)
 	vendorOpts := optionalVendorOptions(m.vendors)
 	m.editID = &id
@@ -2529,6 +2543,7 @@ func (m *Model) showTesseractHint() {
 		return
 	}
 	m.setStatusInfo("install tesseract for text extraction from scanned docs")
+	// Best-effort: hint reappears next session if persist fails.
 	_ = m.store.MarkTesseractHintSeen()
 }
 

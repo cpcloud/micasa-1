@@ -505,7 +505,7 @@ func (s *Store) UpdateHouseProfile(profile HouseProfile) error {
 
 func (s *Store) ProjectTypes() ([]ProjectType, error) {
 	var types []ProjectType
-	if err := s.db.Order(ColName).Find(&types).Error; err != nil {
+	if err := s.db.Order(ColName + " ASC, " + ColID + " DESC").Find(&types).Error; err != nil {
 		return nil, err
 	}
 	return types, nil
@@ -513,7 +513,7 @@ func (s *Store) ProjectTypes() ([]ProjectType, error) {
 
 func (s *Store) MaintenanceCategories() ([]MaintenanceCategory, error) {
 	var categories []MaintenanceCategory
-	if err := s.db.Order(ColName).Find(&categories).Error; err != nil {
+	if err := s.db.Order(ColName + " ASC, " + ColID + " DESC").Find(&categories).Error; err != nil {
 		return nil, err
 	}
 	return categories, nil
@@ -521,7 +521,7 @@ func (s *Store) MaintenanceCategories() ([]MaintenanceCategory, error) {
 
 func (s *Store) ListVendors(includeDeleted bool) ([]Vendor, error) {
 	var vendors []Vendor
-	db := s.db.Order(ColName)
+	db := s.db.Order(ColName + " ASC, " + ColID + " DESC")
 	if includeDeleted {
 		db = db.Unscoped()
 	}

@@ -169,9 +169,11 @@ func NewModel(store *data.Store, options Options) (*Model, error) {
 	if !model.hasHouse {
 		model.startHouseForm()
 	} else {
+		// Best-effort: default to dashboard hidden if setting unreadable.
 		show, _ := store.GetShowDashboard()
 		model.showDashboard = show
 		if show {
+			// Best-effort: start without dashboard on load failure.
 			_ = model.loadDashboard()
 		}
 	}
@@ -1800,6 +1802,7 @@ func (m *Model) handlePullProgress(msg pullProgressMsg) tea.Cmd {
 		if fromChat {
 			if msg.Model != "" {
 				m.llmClient.SetModel(msg.Model)
+				// Best-effort: re-detected on next startup if persist fails.
 				_ = m.store.PutLastModel(msg.Model)
 			}
 			if m.chat != nil {

@@ -82,6 +82,8 @@ func (projectHandler) Load(
 		return nil, nil, nil, err
 	}
 	ids := entityIDs(projects, func(p data.Project) uint { return p.ID })
+	// Supplementary counts degrade to 0 on error so the primary entity
+	// list still renders. This pattern repeats across all handlers.
 	quoteCounts, err := store.CountQuotesByProject(ids)
 	if err != nil {
 		quoteCounts = map[uint]int{}
@@ -248,8 +250,7 @@ func (maintenanceHandler) Restore(store *data.Store, id uint) error {
 }
 
 func (maintenanceHandler) StartAddForm(m *Model) error {
-	m.startMaintenanceForm()
-	return nil
+	return m.startMaintenanceForm()
 }
 
 func (maintenanceHandler) StartEditForm(m *Model, id uint) error {
@@ -392,8 +393,7 @@ func (incidentHandler) Restore(store *data.Store, id uint) error {
 }
 
 func (incidentHandler) StartAddForm(m *Model) error {
-	m.startIncidentForm()
-	return nil
+	return m.startIncidentForm()
 }
 
 func (incidentHandler) StartEditForm(m *Model, id uint) error {

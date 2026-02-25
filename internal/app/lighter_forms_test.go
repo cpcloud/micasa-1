@@ -289,7 +289,7 @@ func TestAddApplianceFormHasOnlyName(t *testing.T) {
 
 func TestAddMaintenanceFormHasOnlyEssentialFields(t *testing.T) {
 	m := newTestModelWithStore(t)
-	m.startMaintenanceForm()
+	require.NoError(t, m.startMaintenanceForm())
 
 	view := formFieldLabels(m)
 	for _, want := range []string{"Item", "Category", "Interval"} {
