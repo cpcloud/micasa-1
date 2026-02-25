@@ -308,8 +308,7 @@ func TestJoinCells(t *testing.T) {
 func TestGapSeparators(t *testing.T) {
 	t.Run("detects collapsed gaps", func(t *testing.T) {
 		normal := "\u2502"
-		styles := DefaultStyles()
-		plainSeps, collapsedSeps := gapSeparators([]int{0, 3, 4}, 5, normal, styles)
+		plainSeps, collapsedSeps := gapSeparators([]int{0, 3, 4}, 5, normal)
 		require.Len(t, collapsedSeps, 2)
 		assert.NotEqual(t, normal, collapsedSeps[0], "first gap should be collapsed separator")
 		assert.Equal(t, normal, collapsedSeps[1], "second gap should be normal separator")
@@ -317,7 +316,7 @@ func TestGapSeparators(t *testing.T) {
 		assert.Equal(t, normal, plainSeps[1])
 	})
 	t.Run("single column returns empty", func(t *testing.T) {
-		plainSeps, collapsedSeps := gapSeparators([]int{2}, 5, "\u2502", DefaultStyles())
+		plainSeps, collapsedSeps := gapSeparators([]int{2}, 5, "\u2502")
 		assert.Empty(t, plainSeps)
 		assert.Empty(t, collapsedSeps)
 	})
@@ -348,18 +347,17 @@ func TestNextHideOrder(t *testing.T) {
 }
 
 func TestRenderHiddenBadges(t *testing.T) {
-	styles := DefaultStyles()
 	t.Run("empty when none hidden", func(t *testing.T) {
 		specs := []columnSpec{{Title: "A"}, {Title: "B"}}
-		assert.Empty(t, renderHiddenBadges(specs, 0, styles))
+		assert.Empty(t, renderHiddenBadges(specs, 0))
 	})
 	t.Run("left only", func(t *testing.T) {
 		specs := []columnSpec{{Title: "ID", HideOrder: 1}, {Title: "Name"}, {Title: "Status"}}
-		assert.Contains(t, renderHiddenBadges(specs, 2, styles), "ID")
+		assert.Contains(t, renderHiddenBadges(specs, 2), "ID")
 	})
 	t.Run("right only", func(t *testing.T) {
 		specs := []columnSpec{{Title: "ID"}, {Title: "Name"}, {Title: "Cost", HideOrder: 1}}
-		assert.Contains(t, renderHiddenBadges(specs, 0, styles), "Cost")
+		assert.Contains(t, renderHiddenBadges(specs, 0), "Cost")
 	})
 	t.Run("both sides", func(t *testing.T) {
 		specs := []columnSpec{
@@ -367,7 +365,7 @@ func TestRenderHiddenBadges(t *testing.T) {
 			{Title: "Name"},
 			{Title: "Cost", HideOrder: 2},
 		}
-		out := renderHiddenBadges(specs, 1, styles)
+		out := renderHiddenBadges(specs, 1)
 		assert.Contains(t, out, "ID")
 		assert.Contains(t, out, "Cost")
 	})
@@ -380,11 +378,10 @@ func TestRenderHiddenBadgesStableWidthAcrossCursorMoves(t *testing.T) {
 		{Title: "Cost", HideOrder: 2},
 		{Title: "Status"},
 	}
-	styles := DefaultStyles()
 
-	start := renderHiddenBadges(specs, 0, styles)
-	middle := renderHiddenBadges(specs, 1, styles)
-	end := renderHiddenBadges(specs, 3, styles)
+	start := renderHiddenBadges(specs, 0)
+	middle := renderHiddenBadges(specs, 1)
+	end := renderHiddenBadges(specs, 3)
 
 	startW := lipgloss.Width(start)
 	middleW := lipgloss.Width(middle)
@@ -702,17 +699,16 @@ func renderTestHeader(
 	sorts []sortEntry,
 	termWidth int,
 ) string {
-	styles := DefaultStyles()
 	sepW := lipgloss.Width(" │ ")
 	widths := columnWidths(specs, nil, termWidth, sepW, nil)
 	seps := make([]string, len(specs)-1)
 	for i := range seps {
 		seps[i] = " │ "
 	}
-	headerSpecs := annotateMoneyHeaders(specs, styles)
+	headerSpecs := annotateMoneyHeaders(specs)
 	vpSorts := make([]sortEntry, len(sorts))
 	copy(vpSorts, sorts)
-	return renderHeaderRow(headerSpecs, widths, seps, 0, vpSorts, false, false, nil, styles)
+	return renderHeaderRow(headerSpecs, widths, seps, 0, vpSorts, false, false, nil)
 }
 
 // Regression: user reported "ID" truncated to "I" on the quotes table

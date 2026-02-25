@@ -16,12 +16,11 @@ import (
 const testDate = "2026-02-15"
 
 func TestCalendarGridRendersMonth(t *testing.T) {
-	styles := DefaultStyles()
 	cal := calendarState{
 		Cursor:   time.Date(2026, 2, 15, 0, 0, 0, 0, time.Local),
 		HasValue: false,
 	}
-	grid := calendarGrid(cal, styles)
+	grid := calendarGrid(cal)
 	assert.Contains(t, grid, "February 2026")
 	assert.Contains(t, grid, "Su Mo Tu We Th Fr Sa")
 	// Feb 2026 has 28 days.
@@ -114,7 +113,7 @@ func TestCalendarKeyNavigation(t *testing.T) {
 	sendKey(m, "k")
 	assert.Equal(t, 15, m.calendar.Cursor.Day())
 
-	grid := calendarGrid(*m.calendar, m.styles)
+	grid := calendarGrid(*m.calendar)
 	assert.Contains(t, grid, "February 2026", "should still show February after navigation")
 }
 
@@ -195,14 +194,14 @@ func TestCalendarMonthNavigation(t *testing.T) {
 	// H = previous month -- grid should show January.
 	sendKey(m, "H")
 	assert.Equal(t, time.January, m.calendar.Cursor.Month())
-	grid := calendarGrid(*m.calendar, m.styles)
+	grid := calendarGrid(*m.calendar)
 	assert.Contains(t, grid, "January 2026")
 
 	// L = next month twice -- grid should show March.
 	sendKey(m, "L")
 	sendKey(m, "L")
 	assert.Equal(t, time.March, m.calendar.Cursor.Month())
-	grid = calendarGrid(*m.calendar, m.styles)
+	grid = calendarGrid(*m.calendar)
 	assert.Contains(t, grid, "March 2026")
 }
 
@@ -219,12 +218,11 @@ func TestCalendarYearNavigation(t *testing.T) {
 }
 
 func TestCalendarGridColumnAlignment(t *testing.T) {
-	styles := DefaultStyles()
 	cal := calendarState{
 		Cursor:   time.Date(2026, 11, 1, 0, 0, 0, 0, time.Local),
 		HasValue: false,
 	}
-	grid := calendarGrid(cal, styles)
+	grid := calendarGrid(cal)
 
 	lines := strings.Split(grid, "\n")
 	labelIdx := -1
@@ -257,22 +255,20 @@ func TestCalendarGridColumnAlignment(t *testing.T) {
 }
 
 func TestCalendarFixedHeight(t *testing.T) {
-	styles := DefaultStyles()
 	feb := calendarGrid(calendarState{
 		Cursor: time.Date(2026, 2, 1, 0, 0, 0, 0, time.Local),
-	}, styles)
+	})
 	aug := calendarGrid(calendarState{
 		Cursor: time.Date(2026, 8, 1, 0, 0, 0, 0, time.Local),
-	}, styles)
+	})
 
 	assert.Equal(t, lipgloss.Height(feb), lipgloss.Height(aug), "calendar height should be fixed")
 }
 
 func TestCalendarHintsOnLeft(t *testing.T) {
-	styles := DefaultStyles()
 	grid := calendarGrid(calendarState{
 		Cursor: time.Date(2026, 2, 15, 0, 0, 0, 0, time.Local),
-	}, styles)
+	})
 
 	lines := strings.Split(grid, "\n")
 	foundHint := false
@@ -339,7 +335,7 @@ func TestCalendarMoveMonthViaKeyboardClamps(t *testing.T) {
 	sendKey(m, "L") // next month
 	assert.Equal(t, time.February, m.calendar.Cursor.Month())
 	assert.Equal(t, 28, m.calendar.Cursor.Day())
-	grid := calendarGrid(*m.calendar, m.styles)
+	grid := calendarGrid(*m.calendar)
 	assert.Contains(t, grid, "February 2025",
 		"navigating forward from Jan 31 should show February, not overflow to March")
 }

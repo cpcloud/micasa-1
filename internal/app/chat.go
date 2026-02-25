@@ -1497,14 +1497,14 @@ func (m *Model) highlightModelMatch(match modelCompleterMatch) string {
 	var baseStyle, highlightStyle lipgloss.Style
 	switch {
 	case match.Active:
-		baseStyle = lipgloss.NewStyle().Foreground(accent).Bold(true)
-		highlightStyle = lipgloss.NewStyle().Foreground(accent).Bold(true).Underline(true)
+		baseStyle = m.styles.ModelActive
+		highlightStyle = m.styles.ModelActiveHL
 	case match.Local:
-		baseStyle = lipgloss.NewStyle().Foreground(textBright)
-		highlightStyle = lipgloss.NewStyle().Foreground(accent).Bold(true)
+		baseStyle = m.styles.ModelLocal
+		highlightStyle = m.styles.ModelLocalHL
 	default:
-		baseStyle = lipgloss.NewStyle().Foreground(textDim).Italic(true)
-		highlightStyle = lipgloss.NewStyle().Foreground(accent).Bold(true).Italic(true)
+		baseStyle = m.styles.ModelRemote
+		highlightStyle = m.styles.ModelRemoteHL
 	}
 
 	if len(match.Positions) == 0 {

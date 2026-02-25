@@ -1391,7 +1391,7 @@ func (m *Model) renderPreviewTable(
 	}
 
 	header := renderHeaderRow(
-		g.specs, widths, seps, colCursor, nil, false, false, g.cells, m.styles,
+		g.specs, widths, seps, colCursor, nil, false, false, g.cells,
 	)
 	divider := renderDivider(widths, seps, divSep, m.styles.TableSeparator)
 
@@ -1404,7 +1404,7 @@ func (m *Model) renderPreviewTable(
 	}
 	rows := renderRows(
 		g.specs, g.cells, g.meta, widths,
-		seps, seps, rowCursor, colCursor, 0, m.styles, pinRenderContext{},
+		seps, seps, rowCursor, colCursor, 0, pinRenderContext{},
 	)
 
 	parts := []string{header, divider}
@@ -1438,16 +1438,16 @@ func (m *Model) renderExtractionStep(
 	switch info.Status {
 	case stepPending:
 		icon = "  "
-		nameStyle = lipgloss.NewStyle().Foreground(textDim)
+		nameStyle = m.styles.ExtPending
 	case stepRunning:
 		icon = ex.Spinner.View() + " "
-		nameStyle = lipgloss.NewStyle().Foreground(accent)
+		nameStyle = m.styles.ExtRunning
 	case stepDone:
-		icon = lipgloss.NewStyle().Foreground(success).Render("ok") + " "
-		nameStyle = lipgloss.NewStyle().Foreground(textBright)
+		icon = m.styles.ExtOk.Render("ok") + " "
+		nameStyle = m.styles.ExtDone
 	case stepFailed:
-		icon = lipgloss.NewStyle().Foreground(danger).Render("xx") + " "
-		nameStyle = lipgloss.NewStyle().Foreground(danger)
+		icon = m.styles.ExtFail.Render("xx") + " "
+		nameStyle = m.styles.ExtFailed
 	}
 
 	// Determine if expanded: auto-expand running/failed, and keep LLM expanded
@@ -1464,19 +1464,24 @@ func (m *Model) renderExtractionStep(
 	stepSettled := info.Status == stepDone || info.Status == stepFailed
 	if focused && (ex.Done || stepSettled) {
 		if expanded {
-			cursor = lipgloss.NewStyle().Foreground(accent).Render("\u25be ")
+			cursor = m.styles.ExtCursor.Render("\u25be ")
 		} else {
-			cursor = lipgloss.NewStyle().Foreground(accent).Render("\u25b8 ")
+			cursor = m.styles.ExtCursor.Render("\u25b8 ")
 		}
 	}
 
 	// Columnar header: icon | name | detail | metric | elapsed [| rerun hint].
-	header := cursor + icon + nameStyle.Render(fmt.Sprintf("%-4s", name))
+	var hdr strings.Builder
+	hdr.WriteString(cursor)
+	hdr.WriteString(icon)
+	hdr.WriteString(nameStyle.Render(fmt.Sprintf("%-4s", name)))
 	if cols.Detail > 0 {
-		header += "  " + hint.Render(fmt.Sprintf("%-*s", cols.Detail, info.Detail))
+		hdr.WriteString("  ")
+		hdr.WriteString(hint.Render(fmt.Sprintf("%-*s", cols.Detail, info.Detail)))
 	}
 	if cols.Metric > 0 {
-		header += "  " + hint.Render(fmt.Sprintf("%*s", cols.Metric, info.Metric))
+		hdr.WriteString("  ")
+		hdr.WriteString(hint.Render(fmt.Sprintf("%*s", cols.Metric, info.Metric)))
 	}
 	if cols.Elapsed > 0 {
 		var e string
@@ -1486,11 +1491,14 @@ func (m *Model) renderExtractionStep(
 		case info.Status == stepRunning && !info.Started.IsZero():
 			e = fmt.Sprintf("%.1fs", time.Since(info.Started).Seconds())
 		}
-		header += "  " + hint.Render(fmt.Sprintf("%*s", cols.Elapsed, e))
+		hdr.WriteString("  ")
+		hdr.WriteString(hint.Render(fmt.Sprintf("%*s", cols.Elapsed, e)))
 	}
 	if si == stepLLM && info.Status == stepDone && ex.Done && focused {
-		header += "  " + lipgloss.NewStyle().Foreground(textDim).Render("r to rerun")
+		hdr.WriteString("  ")
+		hdr.WriteString(m.styles.ExtRerun.Render("r to rerun"))
 	}
+	header := hdr.String()
 
 	if !expanded || len(info.Logs) == 0 {
 		return header
@@ -1498,7 +1506,7 @@ func (m *Model) renderExtractionStep(
 
 	// Expanded: header + rendered log content with left border pipe.
 	pipeIndent := "     " // align pipe under step name
-	pipe := lipgloss.NewStyle().Foreground(border).Render("\u2502") + " "
+	pipe := m.styles.TableSeparator.Render("\u2502") + " "
 	logW := innerW - len(pipeIndent) - 2 // pipe + space
 	raw := strings.Join(info.Logs, "\n")
 

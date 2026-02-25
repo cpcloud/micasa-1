@@ -130,7 +130,7 @@ func BenchmarkComputeTableViewport(b *testing.B) {
 	sep := m.styles.TableSeparator.Render(" │ ")
 	b.ResetTimer()
 	for b.Loop() {
-		_ = computeTableViewport(tab, 120, sep, m.styles)
+		_ = computeTableViewport(tab, 120, sep)
 	}
 }
 
@@ -144,7 +144,7 @@ func BenchmarkComputeTableViewportPins(b *testing.B) {
 	sep := m.styles.TableSeparator.Render(" │ ")
 	b.ResetTimer()
 	for b.Loop() {
-		_ = computeTableViewport(tab, 120, sep, m.styles)
+		_ = computeTableViewport(tab, 120, sep)
 	}
 }
 

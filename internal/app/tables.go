@@ -48,7 +48,7 @@ func (m *Model) setAllTableKeyMaps(km table.KeyMap) {
 	}
 }
 
-func NewTabs(styles Styles) []Tab {
+func NewTabs() []Tab {
 	projectSpecs := projectColumnSpecs()
 	quoteSpecs := quoteColumnSpecs()
 	maintenanceSpecs := maintenanceColumnSpecs()
@@ -62,28 +62,28 @@ func NewTabs(styles Styles) []Tab {
 			Name:    "Projects",
 			Handler: projectHandler{},
 			Specs:   projectSpecs,
-			Table:   newTable(specsToColumns(projectSpecs), styles),
+			Table:   newTable(specsToColumns(projectSpecs)),
 		},
 		{
 			Kind:    tabQuotes,
 			Name:    tabQuotes.String(),
 			Handler: quoteHandler{},
 			Specs:   quoteSpecs,
-			Table:   newTable(specsToColumns(quoteSpecs), styles),
+			Table:   newTable(specsToColumns(quoteSpecs)),
 		},
 		{
 			Kind:    tabMaintenance,
 			Name:    "Maintenance",
 			Handler: maintenanceHandler{},
 			Specs:   maintenanceSpecs,
-			Table:   newTable(specsToColumns(maintenanceSpecs), styles),
+			Table:   newTable(specsToColumns(maintenanceSpecs)),
 		},
 		{
 			Kind:        tabIncidents,
 			Name:        tabIncidents.String(),
 			Handler:     incidentHandler{},
 			Specs:       incidentSpecs,
-			Table:       newTable(specsToColumns(incidentSpecs), styles),
+			Table:       newTable(specsToColumns(incidentSpecs)),
 			ShowDeleted: true,
 		},
 		{
@@ -91,21 +91,21 @@ func NewTabs(styles Styles) []Tab {
 			Name:    "Appliances",
 			Handler: applianceHandler{},
 			Specs:   applianceSpecs,
-			Table:   newTable(specsToColumns(applianceSpecs), styles),
+			Table:   newTable(specsToColumns(applianceSpecs)),
 		},
 		{
 			Kind:    tabVendors,
 			Name:    "Vendors",
 			Handler: vendorHandler{},
 			Specs:   vendorSpecs,
-			Table:   newTable(specsToColumns(vendorSpecs), styles),
+			Table:   newTable(specsToColumns(vendorSpecs)),
 		},
 		{
 			Kind:    tabDocuments,
 			Name:    tabDocuments.String(),
 			Handler: documentHandler{},
 			Specs:   documentSpecs,
-			Table:   newTable(specsToColumns(documentSpecs), styles),
+			Table:   newTable(specsToColumns(documentSpecs)),
 		},
 	}
 }
@@ -602,14 +602,14 @@ func specsToColumns(specs []columnSpec) []table.Column {
 	return cols
 }
 
-func newTable(columns []table.Column, styles Styles) table.Model {
+func newTable(columns []table.Column) table.Model {
 	tbl := table.New(
 		table.WithColumns(columns),
 		table.WithFocused(true),
 	)
 	tbl.SetStyles(table.Styles{
-		Header:   styles.TableHeader,
-		Selected: styles.TableSelected,
+		Header:   appStyles.TableHeader,
+		Selected: appStyles.TableSelected,
 	})
 	return tbl
 }

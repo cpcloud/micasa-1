@@ -115,10 +115,10 @@ func (m *Model) houseArt() string {
 	if m.effectiveWidth() < 80 {
 		return ""
 	}
-	rf := lipgloss.NewStyle().Foreground(accent)    // roof
-	wl := lipgloss.NewStyle().Foreground(textMid)   // walls
-	wn := lipgloss.NewStyle().Foreground(warning)   // windows (lit)
-	dr := lipgloss.NewStyle().Foreground(secondary) // door
+	rf := m.styles.HouseRoof   // roof
+	wl := m.styles.HouseWall   // walls
+	wn := m.styles.HouseWindow // windows (lit)
+	dr := m.styles.HouseDoor   // door
 	lines := []string{
 		rf.Render("      ▄▓▄"),
 		rf.Render("    ▄▓▓▓▓▓▄"),

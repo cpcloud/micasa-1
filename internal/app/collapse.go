@@ -16,15 +16,14 @@ func gapSeparators(
 	visToFull []int,
 	_ int,
 	normalSep string,
-	styles Styles,
 ) (plainSeps, collapsedSeps []string) {
 	n := len(visToFull)
 	if n <= 1 {
 		return nil, nil
 	}
-	collapsedSep := styles.TableSeparator.Render(" ") +
+	collapsedSep := appStyles.TableSeparator.Render(" ") +
 		lipgloss.NewStyle().Foreground(secondary).Render("⋯") +
-		styles.TableSeparator.Render(" ")
+		appStyles.TableSeparator.Render(" ")
 
 	plainSeps = make([]string, n-1)
 	collapsedSeps = make([]string, n-1)
@@ -61,9 +60,8 @@ func hiddenColumnNames(specs []columnSpec) []string {
 func renderHiddenBadges(
 	specs []columnSpec,
 	colCursor int,
-	styles Styles,
 ) string {
-	sep := styles.HeaderHint.Render(" · ")
+	sep := appStyles.HeaderHint.Render(" · ")
 
 	var leftParts, rightParts []string
 	for i, spec := range specs {
@@ -98,7 +96,7 @@ func renderHiddenBadges(
 		if len(rightParts) == 0 && i == len(leftParts)-1 {
 			name += rightMarker
 		}
-		allParts = append(allParts, styles.HiddenLeft.Render(name))
+		allParts = append(allParts, appStyles.HiddenLeft.Render(name))
 	}
 	for i, name := range rightParts {
 		// Reserve left marker slot when all hidden columns are right of cursor.
@@ -108,7 +106,7 @@ func renderHiddenBadges(
 		if i == len(rightParts)-1 {
 			name += rightMarker
 		}
-		allParts = append(allParts, styles.HiddenRight.Render(name))
+		allParts = append(allParts, appStyles.HiddenRight.Render(name))
 	}
 	return strings.Join(allParts, sep)
 }

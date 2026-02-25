@@ -195,6 +195,7 @@ details; do not duplicate that detail here.
   hardcode `/nix/store/...` hashes.
 - **Use `writeShellApplication`** not `writeShellScriptBin` for Nix shell
   scripts. Use **`pkgs.python3.pkgs`** not `pkgs.python3Packages`.
+- **Nix package mappings**: `benchstat` is in `nixpkgs#goperf`.
 
 ### Git and CI
 
@@ -240,6 +241,10 @@ details; do not duplicate that detail here.
   could tie MUST include a tiebreaker (typically `id DESC`).
 - **Audit new deps before adding**: Review source for security issues
   before integrating third-party dependencies.
+- **Styles live in `appStyles`**: Add new `lipgloss.Style` fields to the
+  `Styles` struct in `styles.go` and reference them via the package-level
+  `appStyles` singleton. Never inline `lipgloss.NewStyle()` in rendering
+  functions -- it defeats the singleton and reintroduces per-frame copies.
 
 ### UI/UX conventions
 

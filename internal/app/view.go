@@ -632,7 +632,7 @@ func (m *Model) buildCalendarOverlay() string {
 	if m.calendar == nil {
 		return ""
 	}
-	grid := calendarGrid(*m.calendar, m.styles)
+	grid := calendarGrid(*m.calendar)
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(accent).
@@ -866,11 +866,11 @@ func (m *Model) tableView(tab *Tab) string {
 	normalDiv := m.styles.TableSeparator.Render("─┼─")
 	sepW := lipgloss.Width(normalSep)
 
-	vp := computeTableViewport(tab, width, normalSep, m.styles)
+	vp := computeTableViewport(tab, width, normalSep)
 	if len(vp.Specs) == 0 {
 		return ""
 	}
-	headerSpecs := annotateMoneyHeaders(vp.Specs, m.styles)
+	headerSpecs := annotateMoneyHeaders(vp.Specs)
 	header := renderHeaderRow(
 		headerSpecs,
 		vp.Widths,
@@ -880,12 +880,11 @@ func (m *Model) tableView(tab *Tab) string {
 		vp.HasLeft,
 		vp.HasRight,
 		vp.LinkCells,
-		m.styles,
 	)
 	divider := renderDivider(vp.Widths, vp.PlainSeps, normalDiv, m.styles.TableSeparator)
 
 	// Badge line accounts for 1 row of vertical space when visible.
-	badges := renderHiddenBadges(tab.Specs, tab.ColCursor, m.styles)
+	badges := renderHiddenBadges(tab.Specs, tab.ColCursor)
 	badgeChrome := 0
 	if badges != "" {
 		badgeChrome = 1
@@ -922,7 +921,6 @@ func (m *Model) tableView(tab *Tab) string {
 		tab.Table.Cursor(),
 		vp.Cursor,
 		effectiveHeight,
-		m.styles,
 		pinCtx,
 	)
 

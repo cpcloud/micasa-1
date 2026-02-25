@@ -268,13 +268,12 @@ func TestBuildColumnFinderOverlay_ShowsColumns(t *testing.T) {
 }
 
 func TestHighlightFuzzyMatch(t *testing.T) {
-	styles := DefaultStyles()
 	match := columnFinderMatch{
 		Entry:     columnFinderEntry{Title: "Status"},
 		Score:     50,
 		Positions: []int{0, 1},
 	}
-	result := highlightFuzzyMatch(match, styles)
+	result := highlightFuzzyMatch(match)
 	assert.Contains(t, result, "St")
 	assert.Contains(t, result, "atus")
 }

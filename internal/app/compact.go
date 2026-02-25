@@ -39,12 +39,12 @@ func statusLabel(status string) string {
 // annotateMoneyHeaders returns a copy of specs with a styled green "$"
 // appended to money column titles. The unit lives in the header so cell
 // values can be bare numbers.
-func annotateMoneyHeaders(specs []columnSpec, styles Styles) []columnSpec {
+func annotateMoneyHeaders(specs []columnSpec) []columnSpec {
 	out := make([]columnSpec, len(specs))
 	copy(out, specs)
 	for i, spec := range out {
 		if spec.Kind == cellMoney {
-			out[i].Title = spec.Title + " " + styles.Money.Render("$")
+			out[i].Title = spec.Title + " " + appStyles.Money.Render("$")
 		}
 	}
 	return out

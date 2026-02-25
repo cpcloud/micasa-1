@@ -28,19 +28,16 @@ const calendarMaxRows = 6
 // calendarGrid renders a single month calendar with the cursor highlighted
 // and a key-hint column on the left. The grid is always calendarMaxRows tall
 // so the overlay never changes size when switching months.
-func calendarGrid(cal calendarState, styles Styles) string {
+func calendarGrid(cal calendarState) string {
 	cursor := cal.Cursor
 	year, month := cursor.Year(), cursor.Month()
 
 	// Header: month name + year, centered over the day grid.
-	header := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(accent).
+	header := appStyles.CalHeader.
 		Render(fmt.Sprintf(" %s %d ", month.String(), year))
 
 	// Day-of-week labels.
-	dayLabels := lipgloss.NewStyle().
-		Foreground(textDim).
+	dayLabels := appStyles.CalDayLabel.
 		Render("Su Mo Tu We Th Fr Sa")
 
 	calW := lipgloss.Width(dayLabels) // 20
@@ -68,11 +65,11 @@ func calendarGrid(cal calendarState, styles Styles) string {
 		var style lipgloss.Style
 		switch {
 		case isCursor:
-			style = styles.CalCursor
+			style = appStyles.CalCursor
 		case isSelected:
-			style = styles.CalSelected
+			style = appStyles.CalSelected
 		case isToday:
-			style = styles.CalToday
+			style = appStyles.CalToday
 		default:
 			style = lipgloss.NewStyle()
 		}
@@ -108,7 +105,7 @@ func calendarGrid(cal calendarState, styles Styles) string {
 	)
 
 	// Left panel: key hints stacked vertically, right-aligned keys.
-	hints := calendarHints(styles)
+	hints := calendarHints()
 	hintsH := lipgloss.Height(hints)
 	rightH := lipgloss.Height(rightPanel)
 	// Vertically center hints against the right panel.
@@ -122,9 +119,9 @@ func calendarGrid(cal calendarState, styles Styles) string {
 }
 
 // calendarHints renders the key legend as a two-column vertical list.
-func calendarHints(styles Styles) string {
-	dim := lipgloss.NewStyle().Foreground(textDim)
-	key := lipgloss.NewStyle().Foreground(accent).Bold(true)
+func calendarHints() string {
+	dim := appStyles.CalDayLabel
+	key := appStyles.CalHintKey
 
 	type hint struct{ k, v string }
 	items := []hint{
@@ -150,7 +147,6 @@ func calendarHints(styles Styles) string {
 		k := fmt.Sprintf("%*s", maxKeyW, h.k)
 		lines[i] = key.Render(k) + " " + dim.Render(h.v)
 	}
-	_ = styles // reserved for future styling
 	return strings.Join(lines, "\n")
 }
 

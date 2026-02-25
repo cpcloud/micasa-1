@@ -80,18 +80,17 @@ func renderHeaderRow(
 	sorts []sortEntry,
 	hasLeft, hasRight bool,
 	rows [][]cell,
-	styles Styles,
 ) string {
 	cells := make([]string, 0, len(specs))
 	last := len(specs) - 1
-	arrow := lipgloss.NewStyle().Foreground(secondary)
+	arrow := appStyles.SortArrow
 	for i, spec := range specs {
 		width := safeWidth(widths, i)
 		title := spec.Title
 		if (spec.Link != nil || spec.Kind == cellEntity) && columnHasLinks(rows, i) {
-			title = title + " " + styles.LinkIndicator.Render(linkArrow)
+			title = title + " " + appStyles.LinkIndicator.Render(linkArrow)
 		} else if spec.Kind == cellDrilldown {
-			title = title + " " + styles.LinkIndicator.Render(drilldownArrow)
+			title = title + " " + appStyles.LinkIndicator.Render(drilldownArrow)
 		}
 		// Scroll arrows embedded in edge column headers.
 		if i == 0 && hasLeft {
@@ -103,9 +102,9 @@ func renderHeaderRow(
 		indicator := sortIndicator(sorts, i)
 		text := formatHeaderCell(title, indicator, width)
 		if i == colCursor {
-			cells = append(cells, styles.ColActiveHeader.Render(text))
+			cells = append(cells, appStyles.ColActiveHeader.Render(text))
 		} else {
-			cells = append(cells, styles.TableHeader.Render(text))
+			cells = append(cells, appStyles.TableHeader.Render(text))
 		}
 	}
 	return joinCells(cells, separators)
@@ -136,7 +135,7 @@ type tableViewport struct {
 	VisToFull     []int // viewport column index → full tab.Specs index
 }
 
-func computeTableViewport(tab *Tab, termWidth int, normalSep string, styles Styles) tableViewport {
+func computeTableViewport(tab *Tab, termWidth int, normalSep string) tableViewport {
 	var vp tableViewport
 	if tab == nil {
 		return vp
@@ -185,7 +184,7 @@ func computeTableViewport(tab *Tab, termWidth int, normalSep string, styles Styl
 	vp.Widths = columnWidths(vp.Specs, fullCells, termWidth, sepW, visNatural[start:end])
 
 	// Per-gap separators need to match the viewport's projected columns.
-	vp.PlainSeps, vp.CollapsedSeps = gapSeparators(vpVisToFull, len(tab.Specs), normalSep, styles)
+	vp.PlainSeps, vp.CollapsedSeps = gapSeparators(vpVisToFull, len(tab.Specs), normalSep)
 
 	return vp
 }
@@ -341,7 +340,6 @@ func renderRows(
 	cursor int,
 	colCursor int,
 	height int,
-	styles Styles,
 	pinCtx pinRenderContext,
 ) []string {
 	total := len(rows)
@@ -373,7 +371,6 @@ func renderRows(
 			deleted,
 			dimmed,
 			colCursor,
-			styles,
 			pinCtx,
 			i,
 		)
@@ -400,7 +397,6 @@ func renderRow(
 	deleted bool,
 	dimmed bool,
 	colCursor int,
-	styles Styles,
 	pinCtx pinRenderContext,
 	rowIdx int,
 ) string {
@@ -432,7 +428,7 @@ func renderRow(
 				pinMatch = !pinMatch
 			}
 		}
-		rendered := renderCell(cellValue, spec, width, hl, deleted, dimmed, pinMatch, styles)
+		rendered := renderCell(cellValue, spec, width, hl, deleted, dimmed, pinMatch)
 		cells = append(cells, rendered)
 	}
 	return joinCells(cells, separators)
@@ -470,26 +466,25 @@ func renderCell(
 	deleted bool,
 	dimmed bool,
 	pinMatch bool,
-	styles Styles,
 ) string {
 	if width < 1 {
 		width = 1
 	}
 	value := firstLine(cellValue.Value)
-	style := cellStyle(cellValue.Kind, styles)
+	style := cellStyle(cellValue.Kind)
 	if cellValue.Null {
 		value = "\u2205" // ∅
-		style = styles.Null
+		style = appStyles.Null
 	} else if value == "" {
 		value = "\u2014" // —
-		style = styles.Empty
+		style = appStyles.Empty
 	} else if cellValue.Kind == cellDrilldown && value != "0" {
-		return renderPillCell(value, width, hl, deleted, dimmed, styles)
+		return renderPillCell(value, width, hl, deleted, dimmed)
 	} else if cellValue.Kind == cellDrilldown {
 		// Zero count: dim instead of pill to keep the grid quiet.
-		style = styles.Empty
+		style = appStyles.Empty
 	} else if cellValue.Kind == cellStatus {
-		if s, ok := styles.StatusStyles[value]; ok {
+		if s, ok := appStyles.StatusStyles[value]; ok {
 			style = s
 		}
 		value = statusLabel(value)
@@ -500,7 +495,7 @@ func renderCell(
 			style = entityCellStyle(value)
 			value = value[2:]
 		} else {
-			style = lipgloss.NewStyle().Foreground(textDim)
+			style = appStyles.CellDim
 		}
 	} else if cellValue.Kind == cellUrgency {
 		style = urgencyStyle(value)
@@ -510,7 +505,7 @@ func renderCell(
 
 	// Pin match overrides semantic color with the muted/pin color.
 	if pinMatch {
-		style = styles.Pinned
+		style = appStyles.Pinned
 	}
 
 	if deleted {
@@ -558,7 +553,7 @@ func renderCell(
 			if gap < 1 {
 				gap = 1
 			}
-			dimSuffix := styles.Empty.Render(noteSuffix)
+			dimSuffix := appStyles.Empty.Render(noteSuffix)
 			return styled + strings.Repeat(" ", gap) + dimSuffix
 		}
 		if pad := width - textW; pad > 0 {
@@ -586,7 +581,7 @@ func renderCell(
 		if gap < 1 {
 			gap = 1
 		}
-		dimSuffix := styles.Empty.Render(noteSuffix)
+		dimSuffix := appStyles.Empty.Render(noteSuffix)
 		return styledText + strings.Repeat(" ", gap) + dimSuffix
 	}
 
@@ -602,17 +597,13 @@ func renderPillCell(
 	hl cellHighlight,
 	deleted bool,
 	dimmed bool,
-	styles Styles,
 ) string {
-	style := styles.Drilldown
+	style := appStyles.Drilldown
 	if dimmed && !deleted {
-		style = lipgloss.NewStyle().Foreground(textDim)
+		style = appStyles.CellDim
 	}
 	if deleted {
-		style = lipgloss.NewStyle().
-			Foreground(textDim).
-			Strikethrough(true).
-			Italic(true)
+		style = appStyles.DeletedCell
 		pill := style.Render(value)
 		pillW := lipgloss.Width(pill)
 		if pad := width - pillW; pad > 0 {
@@ -660,14 +651,14 @@ func joinCells(cells []string, separators []string) string {
 	return b.String()
 }
 
-func cellStyle(kind cellKind, styles Styles) lipgloss.Style {
+func cellStyle(kind cellKind) lipgloss.Style {
 	switch kind {
 	case cellMoney:
-		return styles.Money
+		return appStyles.Money
 	case cellReadonly:
-		return styles.Readonly
+		return appStyles.Readonly
 	case cellDrilldown:
-		return styles.Drilldown
+		return appStyles.Drilldown
 	default:
 		return defaultStyle
 	}

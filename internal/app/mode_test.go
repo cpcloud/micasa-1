@@ -15,10 +15,9 @@ import (
 
 // newTestModel creates a minimal Model for mode tests (no database).
 func newTestModel() *Model {
-	styles := DefaultStyles()
 	m := &Model{
-		styles: styles,
-		tabs:   NewTabs(styles),
+		styles: appStyles,
+		tabs:   NewTabs(),
 		active: 0,
 		mode:   modeNormal,
 		width:  120,

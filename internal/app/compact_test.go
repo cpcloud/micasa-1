@@ -151,14 +151,13 @@ func TestCompactMoneyCellsPreservesNull(t *testing.T) {
 }
 
 func TestAnnotateMoneyHeaders(t *testing.T) {
-	styles := DefaultStyles()
 	specs := []columnSpec{
 		{Title: "Name", Kind: cellText},
 		{Title: "Budget", Kind: cellMoney},
 		{Title: "Actual", Kind: cellMoney},
 		{Title: "ID", Kind: cellReadonly},
 	}
-	out := annotateMoneyHeaders(specs, styles)
+	out := annotateMoneyHeaders(specs)
 
 	// Non-money columns unchanged.
 	assert.Equal(t, "Name", out[0].Title)

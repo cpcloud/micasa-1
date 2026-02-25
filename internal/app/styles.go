@@ -58,6 +58,30 @@ type Styles struct {
 	ChatAssistant    lipgloss.Style // chat: assistant message label
 	ChatNotice       lipgloss.Style // chat: system notice (model switch, pull progress)
 	ChatInterrupted  lipgloss.Style // chat: user-initiated cancellation
+	ExtPending       lipgloss.Style // extraction step: pending name
+	ExtRunning       lipgloss.Style // extraction step: running name
+	ExtDone          lipgloss.Style // extraction step: done name
+	ExtFailed        lipgloss.Style // extraction step: failed name
+	ExtOk            lipgloss.Style // extraction step: ok icon
+	ExtFail          lipgloss.Style // extraction step: fail icon
+	ExtCursor        lipgloss.Style // extraction step: cursor arrow
+	ExtRerun         lipgloss.Style // extraction step: rerun hint
+	ModelActive      lipgloss.Style // model completer: active base
+	ModelActiveHL    lipgloss.Style // model completer: active highlight
+	ModelLocal       lipgloss.Style // model completer: local base
+	ModelLocalHL     lipgloss.Style // model completer: local highlight
+	ModelRemote      lipgloss.Style // model completer: remote base
+	ModelRemoteHL    lipgloss.Style // model completer: remote highlight
+	SortArrow        lipgloss.Style // table: sort direction arrow
+	CellDim          lipgloss.Style // table: dim fallback cell
+	DeletedCell      lipgloss.Style // table: deleted row cell
+	CalHeader        lipgloss.Style // calendar: month/year header
+	CalDayLabel      lipgloss.Style // calendar: day-of-week labels
+	CalHintKey       lipgloss.Style // calendar: key legend keys
+	HouseRoof        lipgloss.Style // house art: roof
+	HouseWall        lipgloss.Style // house art: walls
+	HouseWindow      lipgloss.Style // house art: windows
+	HouseDoor        lipgloss.Style // house art: door
 	StatusStyles     map[string]lipgloss.Style
 }
 
@@ -100,8 +124,13 @@ var (
 	border     = lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#374151"}
 )
 
-func DefaultStyles() Styles {
-	return Styles{
+// appStyles is the package-level singleton. Created once at init; never
+// mutated. All rendering code reads from this pointer instead of copying
+// the 86-field struct through function parameters.
+var appStyles = DefaultStyles()
+
+func DefaultStyles() *Styles {
+	return &Styles{
 		Header: lipgloss.NewStyle().Bold(true),
 		HeaderBox: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -260,6 +289,65 @@ func DefaultStyles() Styles {
 		ChatInterrupted: lipgloss.NewStyle().
 			Foreground(secondary).
 			Italic(true),
+		ExtPending: lipgloss.NewStyle().
+			Foreground(textDim),
+		ExtRunning: lipgloss.NewStyle().
+			Foreground(accent),
+		ExtDone: lipgloss.NewStyle().
+			Foreground(textBright),
+		ExtFailed: lipgloss.NewStyle().
+			Foreground(danger),
+		ExtOk: lipgloss.NewStyle().
+			Foreground(success),
+		ExtFail: lipgloss.NewStyle().
+			Foreground(danger),
+		ExtCursor: lipgloss.NewStyle().
+			Foreground(accent),
+		ExtRerun: lipgloss.NewStyle().
+			Foreground(textDim),
+		ModelActive: lipgloss.NewStyle().
+			Foreground(accent).
+			Bold(true),
+		ModelActiveHL: lipgloss.NewStyle().
+			Foreground(accent).
+			Bold(true).
+			Underline(true),
+		ModelLocal: lipgloss.NewStyle().
+			Foreground(textBright),
+		ModelLocalHL: lipgloss.NewStyle().
+			Foreground(accent).
+			Bold(true),
+		ModelRemote: lipgloss.NewStyle().
+			Foreground(textDim).
+			Italic(true),
+		ModelRemoteHL: lipgloss.NewStyle().
+			Foreground(accent).
+			Bold(true).
+			Italic(true),
+		SortArrow: lipgloss.NewStyle().
+			Foreground(secondary),
+		CellDim: lipgloss.NewStyle().
+			Foreground(textDim),
+		DeletedCell: lipgloss.NewStyle().
+			Foreground(textDim).
+			Strikethrough(true).
+			Italic(true),
+		CalHeader: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(accent),
+		CalDayLabel: lipgloss.NewStyle().
+			Foreground(textDim),
+		CalHintKey: lipgloss.NewStyle().
+			Foreground(accent).
+			Bold(true),
+		HouseRoof: lipgloss.NewStyle().
+			Foreground(accent),
+		HouseWall: lipgloss.NewStyle().
+			Foreground(textMid),
+		HouseWindow: lipgloss.NewStyle().
+			Foreground(warning),
+		HouseDoor: lipgloss.NewStyle().
+			Foreground(secondary),
 		StatusStyles: map[string]lipgloss.Style{
 			// Project statuses.
 			"ideating":  lipgloss.NewStyle().Foreground(muted),

@@ -14,7 +14,7 @@ import (
 
 func TestDashMaintSplitRows(t *testing.T) {
 	m := newTestModel()
-	m.styles = DefaultStyles()
+	m.styles = appStyles
 
 	lastSrv := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC)
 	m.dashboard = dashboardData{
@@ -68,7 +68,7 @@ func TestDashMaintSplitRowsEmpty(t *testing.T) {
 
 func TestDashMaintRowsRelativeDuration(t *testing.T) {
 	m := newTestModel()
-	m.styles = DefaultStyles()
+	m.styles = appStyles
 
 	m.dashboard = dashboardData{
 		Overdue: []maintenanceUrgency{{
@@ -90,7 +90,7 @@ func TestDashMaintRowsRelativeDuration(t *testing.T) {
 
 func TestDashProjectRowsColumns(t *testing.T) {
 	m := newTestModel()
-	m.styles = DefaultStyles()
+	m.styles = appStyles
 
 	m.dashboard = dashboardData{
 		ActiveProjects: []data.Project{{
@@ -108,7 +108,7 @@ func TestDashProjectRowsColumns(t *testing.T) {
 
 func TestDashExpiringRowsOverdueAndUpcoming(t *testing.T) {
 	m := newTestModel()
-	m.styles = DefaultStyles()
+	m.styles = appStyles
 
 	expiredDate := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
 	upcomingDate := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)

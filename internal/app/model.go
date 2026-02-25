@@ -63,7 +63,7 @@ type Model struct {
 	pullProgress           progress.Model      // bubbles progress bar widget
 	extraction             *extractionLogState // non-nil when extraction overlay is active
 	chat                   *chatState          // non-nil when chat overlay is open
-	styles                 Styles
+	styles                 *Styles
 	tabs                   []Tab
 	active                 int
 	detailStack            []*detailContext // drilldown stack; top is active detail view
@@ -111,8 +111,6 @@ type Model struct {
 }
 
 func NewModel(store *data.Store, options Options) (*Model, error) {
-	styles := DefaultStyles()
-
 	var client *llm.Client
 	var extraContext string
 	if options.LLMConfig != nil {
@@ -153,8 +151,8 @@ func NewModel(store *data.Store, options Options) (*Model, error) {
 		extractionThinking: options.ExtractionConfig.Thinking,
 		extractors:         options.ExtractionConfig.Extractors,
 		pullProgress:       pprog,
-		styles:             styles,
-		tabs:               NewTabs(styles),
+		styles:             appStyles,
+		tabs:               NewTabs(),
 		active:             0,
 		showHouse:          false,
 		mode:               modeNormal,
@@ -1115,7 +1113,7 @@ func (m *Model) openDetailFromDef(def detailDef, parentID uint, parentName strin
 			Name:    def.subName,
 			Handler: def.handler(parentID),
 			Specs:   specs,
-			Table:   newTable(specsToColumns(specs), m.styles),
+			Table:   newTable(specsToColumns(specs)),
 		},
 	})
 }
@@ -2506,7 +2504,7 @@ func tabIndex(kind TabKind) int {
 // tabKindIndex maps each TabKind to its position in the canonical tab slice.
 // Populated once at init from NewTabs.
 var tabKindIndex = func() map[TabKind]int {
-	tabs := NewTabs(DefaultStyles())
+	tabs := NewTabs()
 	m := make(map[TabKind]int, len(tabs))
 	for i, tab := range tabs {
 		m[tab.Kind] = i

@@ -303,7 +303,7 @@ func (m *Model) buildColumnFinderOverlay() string {
 			match := cf.Matches[i]
 			selected := i == cf.Cursor
 
-			title := highlightFuzzyMatch(match, m.styles)
+			title := highlightFuzzyMatch(match)
 
 			// Hidden indicator.
 			if match.Entry.Hidden {
@@ -346,10 +346,10 @@ func (m *Model) buildColumnFinderOverlay() string {
 
 // highlightFuzzyMatch renders a column title with matched characters
 // in the accent color and bold.
-func highlightFuzzyMatch(match columnFinderMatch, styles Styles) string {
+func highlightFuzzyMatch(match columnFinderMatch) string {
 	title := match.Entry.Title
 	if len(match.Positions) == 0 {
-		return styles.HeaderHint.Render(title)
+		return appStyles.HeaderHint.Render(title)
 	}
 
 	posSet := make(map[int]bool, len(match.Positions))
@@ -358,7 +358,7 @@ func highlightFuzzyMatch(match columnFinderMatch, styles Styles) string {
 	}
 
 	matchStyle := lipgloss.NewStyle().Foreground(accent).Bold(true)
-	dimStyle := styles.HeaderHint
+	dimStyle := appStyles.HeaderHint
 
 	runes := []rune(title)
 	var b strings.Builder
