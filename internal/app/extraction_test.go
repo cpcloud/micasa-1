@@ -46,10 +46,12 @@ func sendExtractionKey(m *Model, key string) {
 	switch key {
 	case "enter":
 		msg = tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		msg = tea.KeyMsg{Type: tea.KeyEscape}
 	default:
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 	}
-	m.handleExtractionKey(msg)
+	m.Update(msg)
 }
 
 // --- Cursor navigation ---

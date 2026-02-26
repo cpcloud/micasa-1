@@ -6,7 +6,6 @@ package app
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,25 +23,25 @@ func formFieldLabels(m *Model) string {
 func TestSaveFormFocusesNewItem(t *testing.T) {
 	m := newTestModelWithStore(t)
 
-	// Create first project and check cursor lands on it.
-	m.startProjectForm()
-	m.form.Init()
+	// Create first project via user interaction.
+	openAddForm(m)
 	v1, ok := m.formData.(*projectFormData)
 	require.True(t, ok)
 	v1.Title = "First"
-	m.saveForm()
+	sendKey(m, "ctrl+s")
+	sendKey(m, "esc")
 
 	meta, ok := m.selectedRowMeta()
 	require.True(t, ok, "should have a selected row after creating first project")
 	firstID := meta.ID
 
 	// Create second project; cursor should move to the new item.
-	m.startProjectForm()
-	m.form.Init()
+	openAddForm(m)
 	v2, ok := m.formData.(*projectFormData)
 	require.True(t, ok)
 	v2.Title = "Second"
-	m.saveForm()
+	sendKey(m, "ctrl+s")
+	sendKey(m, "esc")
 
 	meta, ok = m.selectedRowMeta()
 	require.True(t, ok, "should have a selected row after creating second project")
@@ -50,36 +49,35 @@ func TestSaveFormFocusesNewItem(t *testing.T) {
 		"cursor should move to the newly created item, not stay on the first")
 }
 
-// TestSaveFormInPlaceThenEscFocusesNewItem verifies the Ctrl+S → Esc flow:
-// creating an item via save-in-place, then aborting the form, should leave
+// TestSaveFormInPlaceThenEscFocusesNewItem verifies the Ctrl+S -> Esc flow:
+// creating an item via save-in-place, then closing the form, should leave
 // the cursor on the newly created item.
 func TestSaveFormInPlaceThenEscFocusesNewItem(t *testing.T) {
 	m := newTestModelWithStore(t)
 
 	// Seed an existing project so the cursor starts on something else.
-	m.startProjectForm()
-	m.form.Init()
+	openAddForm(m)
 	v1, ok := m.formData.(*projectFormData)
 	require.True(t, ok)
 	v1.Title = "Existing"
-	m.saveForm()
+	sendKey(m, "ctrl+s")
+	sendKey(m, "esc")
 
 	existingMeta, ok := m.selectedRowMeta()
 	require.True(t, ok)
 	existingID := existingMeta.ID
 
 	// Start a new add form, save in place (Ctrl+S), then exit (Esc).
-	m.startProjectForm()
-	m.form.Init()
+	openAddForm(m)
 	v2, ok := m.formData.(*projectFormData)
 	require.True(t, ok)
 	v2.Title = "Via CtrlS"
-	m.saveFormInPlace()
+	sendKey(m, "ctrl+s")
 	require.NotNil(t, m.editID, "editID should be set after save-in-place create")
 	newID := *m.editID
 
-	// Simulate Esc — form is clean after snapshotForm, so exitForm fires.
-	m.exitForm()
+	// Esc closes the form (clean after Ctrl+S snapshot).
+	sendKey(m, "esc")
 
 	meta, ok := m.selectedRowMeta()
 	require.True(t, ok, "should have a selected row after Ctrl+S then Esc")
@@ -87,26 +85,25 @@ func TestSaveFormInPlaceThenEscFocusesNewItem(t *testing.T) {
 	assert.NotEqual(t, existingID, meta.ID, "cursor should not stay on the old item")
 }
 
-// TestSaveFormInPlaceThenDiscardFocusesNewItem verifies the Ctrl+S → edit
-// more → Esc → confirm discard "y" flow.
+// TestSaveFormInPlaceThenDiscardFocusesNewItem verifies the Ctrl+S -> edit
+// more -> Esc -> confirm discard "y" flow.
 func TestSaveFormInPlaceThenDiscardFocusesNewItem(t *testing.T) {
 	m := newTestModelWithStore(t)
 
 	// Seed an existing project.
-	m.startProjectForm()
-	m.form.Init()
+	openAddForm(m)
 	v1, ok := m.formData.(*projectFormData)
 	require.True(t, ok)
 	v1.Title = "Existing"
-	m.saveForm()
+	sendKey(m, "ctrl+s")
+	sendKey(m, "esc")
 
 	// Start add form, save in place, then make the form dirty.
-	m.startProjectForm()
-	m.form.Init()
+	openAddForm(m)
 	v2, ok := m.formData.(*projectFormData)
 	require.True(t, ok)
 	v2.Title = "Saved InPlace"
-	m.saveFormInPlace()
+	sendKey(m, "ctrl+s")
 	require.NotNil(t, m.editID)
 	newID := *m.editID
 
@@ -115,9 +112,10 @@ func TestSaveFormInPlaceThenDiscardFocusesNewItem(t *testing.T) {
 	m.checkFormDirty()
 	require.True(t, m.formDirty, "form should be dirty after mutation")
 
-	// Simulate confirm-discard "y".
-	m.confirmDiscard = true
-	m.handleConfirmDiscard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	// Esc on dirty form triggers confirm dialog, y confirms discard.
+	sendKey(m, "esc")
+	require.True(t, m.confirmDiscard, "dirty form esc should show confirm dialog")
+	sendKey(m, "y")
 
 	meta, ok := m.selectedRowMeta()
 	require.True(t, ok, "should have a selected row after discard")
@@ -129,21 +127,20 @@ func TestSaveFormInPlaceThenDiscardFocusesNewItem(t *testing.T) {
 func TestSaveFormInPlaceTwiceThenEscFocusesItem(t *testing.T) {
 	m := newTestModelWithStore(t)
 
-	m.startProjectForm()
-	m.form.Init()
+	openAddForm(m)
 	v, ok := m.formData.(*projectFormData)
 	require.True(t, ok)
 	v.Title = "Initial"
-	m.saveFormInPlace()
+	sendKey(m, "ctrl+s")
 	require.NotNil(t, m.editID)
 	createdID := *m.editID
 
-	// Second save — now an update since editID is set.
+	// Second save -- now an update since editID is set.
 	v.Title = "Updated"
-	m.saveFormInPlace()
+	sendKey(m, "ctrl+s")
 	assert.Equal(t, createdID, *m.editID, "editID should not change on update")
 
-	m.exitForm()
+	sendKey(m, "esc")
 
 	meta, ok := m.selectedRowMeta()
 	require.True(t, ok)
@@ -157,14 +154,14 @@ func TestSaveFormInPlaceTwiceThenEscFocusesItem(t *testing.T) {
 func TestEditExistingThenEscKeepsCursor(t *testing.T) {
 	m := newTestModelWithStore(t)
 
-	// Create two projects.
+	// Create two projects via user interaction.
 	for _, title := range []string{"Alpha", "Beta"} {
-		m.startProjectForm()
-		m.form.Init()
+		openAddForm(m)
 		v, ok := m.formData.(*projectFormData)
 		require.True(t, ok)
 		v.Title = title
-		m.saveForm()
+		sendKey(m, "ctrl+s")
+		sendKey(m, "esc")
 	}
 
 	// Cursor is on the last created item ("Beta").
@@ -172,10 +169,16 @@ func TestEditExistingThenEscKeepsCursor(t *testing.T) {
 	require.True(t, ok)
 	betaID := meta.ID
 
-	// Open edit form for Beta, then abort without saving.
-	require.NoError(t, m.startEditProjectForm(betaID))
-	m.form.Init()
-	m.exitForm()
+	// Open edit form for Beta via the ID column (fallback to full form).
+	tab := m.activeTab()
+	require.NotNil(t, tab)
+	sendKey(m, "i")
+	tab.ColCursor = int(projectColID)
+	sendKey(m, "e")
+	require.Equal(t, modeForm, m.mode, "should open full edit form")
+
+	// Abort without saving.
+	sendKey(m, "esc")
 
 	meta, ok = m.selectedRowMeta()
 	require.True(t, ok, "should still have a selected row after edit abort")
@@ -183,28 +186,27 @@ func TestEditExistingThenEscKeepsCursor(t *testing.T) {
 }
 
 // TestExitFormWithNoSaveNoCursorMove verifies that aborting a brand-new form
-// (no save at all) does not move the cursor — editID is nil so exitForm
+// (no save at all) does not move the cursor -- editID is nil so exitForm
 // should be a no-op for cursor positioning.
 func TestExitFormWithNoSaveNoCursorMove(t *testing.T) {
 	m := newTestModelWithStore(t)
 
 	// Create a project so we have a row to be on.
-	m.startProjectForm()
-	m.form.Init()
+	openAddForm(m)
 	v, ok := m.formData.(*projectFormData)
 	require.True(t, ok)
 	v.Title = "Only"
-	m.saveForm()
+	sendKey(m, "ctrl+s")
+	sendKey(m, "esc")
 
 	meta, ok := m.selectedRowMeta()
 	require.True(t, ok)
 	onlyID := meta.ID
 
-	// Open add form and immediately abort — no save.
-	m.startProjectForm()
-	m.form.Init()
+	// Open add form and immediately abort -- no save.
+	openAddForm(m)
 	require.Nil(t, m.editID, "editID should be nil for a new add form")
-	m.exitForm()
+	sendKey(m, "esc")
 
 	meta, ok = m.selectedRowMeta()
 	require.True(t, ok, "should still have a selected row after aborting empty form")
@@ -213,7 +215,7 @@ func TestExitFormWithNoSaveNoCursorMove(t *testing.T) {
 
 func TestAddProjectFormHasOnlyEssentialFields(t *testing.T) {
 	m := newTestModelWithStore(t)
-	m.startProjectForm()
+	openAddForm(m)
 
 	view := formFieldLabels(m)
 	// Essential fields should be present.
@@ -228,17 +230,21 @@ func TestAddProjectFormHasOnlyEssentialFields(t *testing.T) {
 
 func TestEditProjectFormHasMoreFieldsThanAdd(t *testing.T) {
 	m := newTestModelWithStore(t)
-	// Create a project so we can edit it.
-	m.startProjectForm()
-	m.form.Init()
+	// Create a project via user interaction.
+	openAddForm(m)
 	values, ok := m.formData.(*projectFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Title = testProjectTitle
-	require.NoError(t, m.submitProjectForm())
-	m.exitForm()
-	m.reloadAll()
+	sendKey(m, "ctrl+s")
+	sendKey(m, "esc")
 
-	require.NoError(t, m.startEditProjectForm(1))
+	// Open edit form via ID column.
+	tab := m.activeTab()
+	require.NotNil(t, tab)
+	sendKey(m, "i")
+	tab.ColCursor = int(projectColID)
+	sendKey(m, "e")
+	require.Equal(t, modeForm, m.mode, "should open full edit form")
 	// The edit form's first group includes Budget and Actual cost,
 	// which are absent from the add form.
 	view := formFieldLabels(m)
@@ -249,7 +255,8 @@ func TestEditProjectFormHasMoreFieldsThanAdd(t *testing.T) {
 
 func TestAddVendorFormHasOnlyName(t *testing.T) {
 	m := newTestModelWithStore(t)
-	m.startVendorForm()
+	m.active = tabIndex(tabVendors)
+	openAddForm(m)
 
 	view := formFieldLabels(m)
 	assert.Contains(t, view, "Name")
@@ -260,16 +267,22 @@ func TestAddVendorFormHasOnlyName(t *testing.T) {
 
 func TestEditVendorFormHasAllFields(t *testing.T) {
 	m := newTestModelWithStore(t)
-	m.startVendorForm()
-	m.form.Init()
+	m.active = tabIndex(tabVendors)
+	// Create a vendor via user interaction.
+	openAddForm(m)
 	values, ok := m.formData.(*vendorFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Name = "Test Vendor"
-	require.NoError(t, m.submitVendorForm())
-	m.exitForm()
-	m.reloadAll()
+	sendKey(m, "ctrl+s")
+	sendKey(m, "esc")
 
-	require.NoError(t, m.startEditVendorForm(1))
+	// Open edit form via ID column.
+	tab := m.activeTab()
+	require.NotNil(t, tab)
+	sendKey(m, "i")
+	tab.ColCursor = int(vendorColID)
+	sendKey(m, "e")
+	require.Equal(t, modeForm, m.mode, "should open full edit form")
 	view := formFieldLabels(m)
 	for _, want := range []string{"Name", "Contact name", "Email", "Phone", "Website"} {
 		assert.Containsf(t, view, want, "edit vendor form should contain %q", want)
@@ -278,7 +291,8 @@ func TestEditVendorFormHasAllFields(t *testing.T) {
 
 func TestAddApplianceFormHasOnlyName(t *testing.T) {
 	m := newTestModelWithStore(t)
-	m.startApplianceForm()
+	m.active = tabIndex(tabAppliances)
+	openAddForm(m)
 
 	view := formFieldLabels(m)
 	assert.Contains(t, view, "Name")
@@ -289,7 +303,8 @@ func TestAddApplianceFormHasOnlyName(t *testing.T) {
 
 func TestAddMaintenanceFormHasOnlyEssentialFields(t *testing.T) {
 	m := newTestModelWithStore(t)
-	require.NoError(t, m.startMaintenanceForm())
+	m.active = tabIndex(tabMaintenance)
+	openAddForm(m)
 
 	view := formFieldLabels(m)
 	for _, want := range []string{"Item", "Category", "Schedule"} {
@@ -303,16 +318,16 @@ func TestAddMaintenanceFormHasOnlyEssentialFields(t *testing.T) {
 func TestAddQuoteFormHasOnlyEssentialFields(t *testing.T) {
 	m := newTestModelWithStore(t)
 	// Need a project first.
-	m.startProjectForm()
-	m.form.Init()
+	openAddForm(m)
 	values, ok := m.formData.(*projectFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Title = testProjectTitle
-	require.NoError(t, m.submitProjectForm())
-	m.exitForm()
-	m.reloadAll()
+	sendKey(m, "ctrl+s")
+	sendKey(m, "esc")
 
-	require.NoError(t, m.startQuoteForm())
+	// Navigate to Quotes tab and open add form.
+	m.active = tabIndex(tabQuotes)
+	openAddForm(m)
 	view := formFieldLabels(m)
 	for _, want := range []string{"Project", "Vendor name", "Total"} {
 		assert.Containsf(t, view, want, "add quote form should contain %q", want)
