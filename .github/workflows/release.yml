@@ -51,3 +51,12 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean up untagged GHCR images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api /users/cpcloud/packages/container/micasa/versions \
+            --paginate --jq '.[] | select(.metadata.container.tags | length == 0) | .id' \
+          | xargs -I{} gh api -X DELETE /users/cpcloud/packages/container/micasa/versions/{}
