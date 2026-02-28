@@ -334,7 +334,38 @@ func (m *Model) statusView() string {
 		help = m.editModeStatusHelp(modeBadge)
 	}
 
-	return m.withPullProgress(m.withStatusMessage(help))
+	return m.withBgExtractionIndicator(m.withPullProgress(m.withStatusMessage(help)))
+}
+
+// withBgExtractionIndicator prepends a background extraction indicator when
+// extractions are running or awaiting review in the background.
+func (m *Model) withBgExtractionIndicator(statusOutput string) string {
+	n := len(m.bgExtractions)
+	if n == 0 {
+		return statusOutput
+	}
+	var running, ready int
+	for _, bg := range m.bgExtractions {
+		if bg.Done {
+			ready++
+		} else {
+			running++
+		}
+	}
+	var parts []string
+	if running > 0 {
+		sp := m.bgExtractions[0].Spinner.View()
+		parts = append(parts, appStyles.AccentText().Render(
+			fmt.Sprintf("%s %d extracting", sp, running),
+		))
+	}
+	if ready > 0 {
+		parts = append(parts, appStyles.AccentText().Render(
+			fmt.Sprintf("%d ready", ready),
+		))
+	}
+	indicator := strings.Join(parts, "  ")
+	return lipgloss.JoinVertical(lipgloss.Left, indicator, statusOutput)
 }
 
 func (m *Model) inlineInputStatusView() string {

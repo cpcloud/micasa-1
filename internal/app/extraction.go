@@ -11,6 +11,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -36,6 +37,8 @@ const (
 
 const tableDocuments = "documents"
 
+var nextExtractionID atomic.Uint64
+
 type stepStatus int
 
 const (
@@ -57,6 +60,7 @@ type extractionStepInfo struct {
 
 // extractionLogState holds the state of the extraction progress overlay.
 type extractionLogState struct {
+	ID       uint64
 	DocID    uint
 	Filename string
 	Steps    [numExtractionSteps]extractionStepInfo
@@ -166,16 +170,19 @@ func (ex *extractionLogState) advanceCursor() {
 
 // extractionProgressMsg delivers a single async extraction progress update.
 type extractionProgressMsg struct {
+	ID       uint64
 	Progress extract.ExtractProgress
 }
 
 // extractionLLMStartedMsg delivers the LLM stream channel.
 type extractionLLMStartedMsg struct {
+	ID uint64
 	Ch <-chan llm.StreamChunk
 }
 
 // extractionLLMChunkMsg delivers a single LLM token.
 type extractionLLMChunkMsg struct {
+	ID      uint64
 	Content string
 	Done    bool
 	Err     error
@@ -229,6 +236,7 @@ func (m *Model) startExtractionOverlay(
 	}
 
 	state := &extractionLogState{
+		ID:            nextExtractionID.Add(1),
 		DocID:         docID,
 		Filename:      filename,
 		Spinner:       sp,
@@ -267,9 +275,9 @@ func (m *Model) startExtractionOverlay(
 		state.Steps[stepText] = textStep
 	}
 
-	// Replace any existing extraction state.
-	if m.extraction != nil && m.extraction.CancelFn != nil {
-		m.extraction.CancelFn()
+	// Background any existing foreground extraction instead of cancelling.
+	if m.extraction != nil {
+		m.backgroundExtraction()
 	}
 	m.extraction = state
 
@@ -282,10 +290,34 @@ func (m *Model) startExtractionOverlay(
 		state.Steps[stepLLM].Status = stepRunning
 		state.Steps[stepLLM].Started = time.Now()
 		state.Steps[stepLLM].Detail = m.extractionModelLabel()
-		cmd = m.llmExtractCmd(ctx)
+		cmd = m.llmExtractCmd(ctx, state)
 	}
 
 	return tea.Batch(cmd, state.Spinner.Tick)
+}
+
+// findExtraction returns the extraction with the given ID, checking the
+// foreground extraction first, then scanning bgExtractions.
+func (m *Model) findExtraction(id uint64) *extractionLogState {
+	if m.extraction != nil && m.extraction.ID == id {
+		return m.extraction
+	}
+	for _, ex := range m.bgExtractions {
+		if ex.ID == id {
+			return ex
+		}
+	}
+	return nil
+}
+
+// isBgExtraction returns true when the given extraction is in bgExtractions.
+func (m *Model) isBgExtraction(ex *extractionLogState) bool {
+	for _, bg := range m.bgExtractions {
+		if bg == ex {
+			return true
+		}
+	}
+	return false
 }
 
 // cancelExtraction cancels any in-flight extraction and clears state.
@@ -299,6 +331,43 @@ func (m *Model) cancelExtraction() {
 	m.extraction = nil
 }
 
+// cancelAllExtractions cancels the foreground and all background extractions.
+func (m *Model) cancelAllExtractions() {
+	m.cancelExtraction()
+	for _, ex := range m.bgExtractions {
+		if ex.CancelFn != nil {
+			ex.CancelFn()
+		}
+	}
+	m.bgExtractions = nil
+}
+
+// backgroundExtraction moves the foreground extraction to bgExtractions.
+func (m *Model) backgroundExtraction() {
+	if m.extraction == nil {
+		return
+	}
+	m.extraction.Visible = false
+	m.bgExtractions = append(m.bgExtractions, m.extraction)
+	m.extraction = nil
+}
+
+// foregroundExtraction brings the most recent bg extraction to the foreground.
+func (m *Model) foregroundExtraction() {
+	n := len(m.bgExtractions)
+	if n == 0 {
+		return
+	}
+	// If there's already a foreground extraction, background it first.
+	if m.extraction != nil {
+		m.backgroundExtraction()
+	}
+	ex := m.bgExtractions[n-1]
+	m.bgExtractions = m.bgExtractions[:n-1]
+	ex.Visible = true
+	m.extraction = ex
+}
+
 // --- Async commands ---
 
 // asyncExtractCmd starts the async extraction pipeline and returns the
@@ -308,30 +377,31 @@ func asyncExtractCmd(ctx context.Context, state *extractionLogState) tea.Cmd {
 		ctx, state.fileData, state.mime, state.extractors,
 	)
 	state.extractCh = ch
-	return waitForExtractProgress(ch)
+	return waitForExtractProgress(state.ID, ch)
 }
 
 // waitForExtractProgress blocks until the next extraction progress update.
-func waitForExtractProgress(ch <-chan extract.ExtractProgress) tea.Cmd {
+func waitForExtractProgress(id uint64, ch <-chan extract.ExtractProgress) tea.Cmd {
 	return func() tea.Msg {
 		p, ok := <-ch
 		if !ok {
 			return extractionProgressMsg{
+				ID:       id,
 				Progress: extract.ExtractProgress{Done: true},
 			}
 		}
-		return extractionProgressMsg{Progress: p}
+		return extractionProgressMsg{ID: id, Progress: p}
 	}
 }
 
 // llmExtractCmd starts LLM document analysis with streaming.
-func (m *Model) llmExtractCmd(ctx context.Context) tea.Cmd {
+func (m *Model) llmExtractCmd(ctx context.Context, ex *extractionLogState) tea.Cmd {
 	client := m.extractionLLMClient()
 	if client == nil {
 		return nil
 	}
 	schemaCtx := m.buildSchemaContext()
-	ex := m.extraction
+	id := ex.ID
 	return func() tea.Msg {
 		messages := extract.BuildExtractionPrompt(extract.ExtractionPromptInput{
 			DocID:     ex.DocID,
@@ -345,9 +415,9 @@ func (m *Model) llmExtractCmd(ctx context.Context) tea.Cmd {
 			ctx, messages, llm.WithJSONSchema("extraction_operations", extract.OperationsSchema()),
 		)
 		if err != nil {
-			return extractionLLMChunkMsg{Err: err, Done: true}
+			return extractionLLMChunkMsg{ID: id, Err: err, Done: true}
 		}
-		return extractionLLMStartedMsg{Ch: ch}
+		return extractionLLMStartedMsg{ID: id, Ch: ch}
 	}
 }
 
@@ -385,13 +455,14 @@ func toExtractRows(rows []data.EntityRow) []extract.EntityRow {
 }
 
 // waitForLLMChunk blocks until the next LLM token.
-func waitForLLMChunk(ch <-chan llm.StreamChunk) tea.Cmd {
+func waitForLLMChunk(id uint64, ch <-chan llm.StreamChunk) tea.Cmd {
 	return func() tea.Msg {
 		chunk, ok := <-ch
 		if !ok {
-			return extractionLLMChunkMsg{Done: true}
+			return extractionLLMChunkMsg{ID: id, Done: true}
 		}
 		return extractionLLMChunkMsg{
+			ID:      id,
 			Content: chunk.Content,
 			Done:    chunk.Done,
 			Err:     chunk.Err,
@@ -403,7 +474,7 @@ func waitForLLMChunk(ch <-chan llm.StreamChunk) tea.Cmd {
 
 // handleExtractionProgress processes an async extraction progress update.
 func (m *Model) handleExtractionProgress(msg extractionProgressMsg) tea.Cmd {
-	ex := m.extraction
+	ex := m.findExtraction(msg.ID)
 	if ex == nil {
 		return nil
 	}
@@ -424,10 +495,13 @@ func (m *Model) handleExtractionProgress(msg extractionProgressMsg) tea.Cmd {
 				ex.Steps[stepLLM].Status = stepRunning
 				ex.Steps[stepLLM].Started = time.Now()
 				ex.Steps[stepLLM].Detail = m.extractionModelLabel()
-				return m.llmExtractCmd(ex.ctx)
+				return m.llmExtractCmd(ex.ctx, ex)
 			}
 		}
 		ex.Done = true
+		if m.isBgExtraction(ex) {
+			m.setStatusError(fmt.Sprintf("Extraction failed: %s", ex.Filename))
+		}
 		return nil
 	}
 
@@ -442,7 +516,7 @@ func (m *Model) handleExtractionProgress(msg extractionProgressMsg) tea.Cmd {
 		case "extract":
 			step.Detail = fmt.Sprintf("page %d/%d", p.Page, p.Total)
 		}
-		return waitForExtractProgress(ex.extractCh)
+		return waitForExtractProgress(ex.ID, ex.extractCh)
 	}
 
 	// Extraction done.
@@ -482,26 +556,30 @@ func (m *Model) handleExtractionProgress(msg extractionProgressMsg) tea.Cmd {
 			ex.Steps[stepLLM].Status = stepRunning
 			ex.Steps[stepLLM].Started = time.Now()
 			ex.Steps[stepLLM].Detail = m.extractionModelLabel()
-			return m.llmExtractCmd(ex.ctx)
+			return m.llmExtractCmd(ex.ctx, ex)
 		}
 	}
 
 	ex.Done = true
+	if m.isBgExtraction(ex) {
+		m.setStatusInfo(fmt.Sprintf("Extracted: %s", ex.Filename))
+	}
 	return nil
 }
 
 // handleExtractionLLMStarted stores the LLM stream channel and starts reading.
 func (m *Model) handleExtractionLLMStarted(msg extractionLLMStartedMsg) tea.Cmd {
-	if m.extraction == nil {
+	ex := m.findExtraction(msg.ID)
+	if ex == nil {
 		return nil
 	}
-	m.extraction.llmCh = msg.Ch
-	return waitForLLMChunk(msg.Ch)
+	ex.llmCh = msg.Ch
+	return waitForLLMChunk(ex.ID, msg.Ch)
 }
 
 // handleExtractionLLMChunk processes a single LLM token.
 func (m *Model) handleExtractionLLMChunk(msg extractionLLMChunkMsg) tea.Cmd {
-	ex := m.extraction
+	ex := m.findExtraction(msg.ID)
 	if ex == nil {
 		return nil
 	}
@@ -515,6 +593,9 @@ func (m *Model) handleExtractionLLMChunk(msg extractionLLMChunkMsg) tea.Cmd {
 		ex.HasError = true
 		ex.Done = true
 		ex.advanceCursor()
+		if m.isBgExtraction(ex) {
+			m.setStatusError(fmt.Sprintf("Extraction failed: %s", ex.Filename))
+		}
 		return nil
 	}
 
@@ -545,11 +626,18 @@ func (m *Model) handleExtractionLLMChunk(msg extractionLLMChunkMsg) tea.Cmd {
 
 		ex.Done = true
 		ex.advanceCursor()
+		if m.isBgExtraction(ex) {
+			if ex.HasError {
+				m.setStatusError(fmt.Sprintf("Extraction failed: %s", ex.Filename))
+			} else {
+				m.setStatusInfo(fmt.Sprintf("Extracted: %s", ex.Filename))
+			}
+		}
 		return nil
 	}
 
 	// More tokens coming.
-	return waitForLLMChunk(ex.llmCh)
+	return waitForLLMChunk(ex.ID, ex.llmCh)
 }
 
 // dispatchOperations executes validated operations through the Store API.
@@ -900,7 +988,7 @@ func (m *Model) rerunLLMExtraction() tea.Cmd {
 		}
 	}
 
-	return tea.Batch(m.llmExtractCmd(ex.ctx), ex.Spinner.Tick)
+	return tea.Batch(m.llmExtractCmd(ex.ctx, ex), ex.Spinner.Tick)
 }
 
 // --- Keyboard handler ---
@@ -970,6 +1058,10 @@ func (m *Model) handleExtractionPipelineKey(msg tea.KeyMsg) tea.Cmd {
 	case keyX:
 		if ex.Done && len(ex.operations) > 0 {
 			ex.enterExploreMode(m.cur)
+		}
+	case keyCtrlB:
+		if !ex.Done {
+			m.backgroundExtraction()
 		}
 	default:
 		vp, cmd := ex.Viewport.Update(msg)
@@ -1256,7 +1348,10 @@ func (m *Model) buildExtractionPipelineOverlay(
 			}
 			hints = append(hints, m.helpItem(keyEsc, "discard"))
 		} else {
-			hints = append(hints, m.helpItem(keyEsc, "cancel"))
+			hints = append(hints,
+				m.helpItem(keyCtrlB, "background"),
+				m.helpItem(keyEsc, "cancel"),
+			)
 		}
 	}
 	hintStr := joinWithSeparator(m.helpSeparator(), hints...)

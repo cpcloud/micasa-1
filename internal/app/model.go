@@ -52,6 +52,7 @@ const (
 	keyCtrlN = "ctrl+n"
 	keyCtrlO = "ctrl+o"
 	keyCtrlP = "ctrl+p"
+	keyCtrlB = "ctrl+b"
 	keyCtrlQ = "ctrl+q"
 	keyCtrlS = "ctrl+s"
 	keyCtrlU = "ctrl+u"
@@ -183,8 +184,9 @@ type Model struct {
 	extractionReady        bool                // true once extraction model confirmed available
 	pendingExtractionDocID *uint               // doc saved without LLM; extract after pull
 	pull                   pullState
-	extraction             *extractionLogState // non-nil when extraction overlay is active
-	chat                   *chatState          // non-nil when chat overlay is open
+	extraction             *extractionLogState   // non-nil when extraction overlay is active
+	bgExtractions          []*extractionLogState // backgrounded extractions (running or done)
+	chat                   *chatState            // non-nil when chat overlay is open
 	styles                 *Styles
 	tabs                   []Tab
 	active                 int
@@ -319,14 +321,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.cancelChatOperations()
-			m.cancelExtraction()
+			m.cancelAllExtractions()
 			m.cancelPull()
 			return m, tea.Quit
 		}
 		if typed.String() == keyCtrlC {
 			// Cancel any ongoing LLM operations but don't quit.
 			m.cancelChatOperations()
-			m.cancelExtraction()
+			m.cancelAllExtractions()
 			return m, nil
 		}
 	case chatChunkMsg:
@@ -375,6 +377,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.extraction.Spinner, cmd = m.extraction.Spinner.Update(msg)
 			cmds = append(cmds, cmd)
+		}
+		for _, bg := range m.bgExtractions {
+			if !bg.Done {
+				var cmd tea.Cmd
+				bg.Spinner, cmd = bg.Spinner.Update(msg)
+				cmds = append(cmds, cmd)
+			}
 		}
 		return m, tea.Batch(cmds...)
 	case openFileResultMsg:
@@ -683,6 +692,11 @@ func (m *Model) handleCommonKeys(key tea.KeyMsg) (tea.Cmd, bool) {
 			m.updateTabViewport(tab)
 		}
 		return nil, true
+	case keyCtrlB:
+		if len(m.bgExtractions) > 0 {
+			m.foregroundExtraction()
+			return nil, true
+		}
 	}
 	return nil, false
 }
