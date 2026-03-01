@@ -3,7 +3,8 @@
     "includes": [
       "docs/static/css/*.css",
       "docs/static/js/*.js",
-      "*.json"
+      "*.json",
+      ".github/winget-settings.json"
     ]
   },
   "formatter": {

@@ -18,10 +18,10 @@ env:
 
 jobs:
   test:
-    name: Build & Test (${{ matrix.os }}, Go ${{ matrix.go-version }})
+    name: Build & Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     concurrency:
-      group: ci-test-${{ matrix.os }}-${{ matrix.go-version }}-${{ github.ref }}
+      group: ci-test-${{ matrix.os }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     strategy:
       fail-fast: false
@@ -33,7 +33,6 @@ jobs:
           - macos-15-intel
           - windows-latest
           - windows-11-arm
-        go-version: ["1.25"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -41,7 +40,7 @@ jobs:
 
       - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: "1.25"
 
       - name: Install extraction tools (Linux)
         if: runner.os == 'Linux'
@@ -59,13 +58,15 @@ jobs:
         if: runner.os == 'macOS'
         run: echo "$(brew --prefix imagemagick-full)/bin" >> "$GITHUB_PATH"
 
-      - name: Disable winget progress bar (Windows)
+      # Microsoft.DesktopAppInstaller_8wekyb3d8bbwe is the package family
+      # name for winget in the Windows Store.
+      - name: Configure winget (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $settingsDir = "$env:LOCALAPPDATA\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState"
           New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
-          '{"visual":{"progressBar":"disabled"}}' | Set-Content "$settingsDir\settings.json"
+          Copy-Item .github\winget-settings.json "$settingsDir\settings.json"
 
       - name: Install extraction tools (Windows)
         if: runner.os == 'Windows'
@@ -92,35 +93,50 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Generate test fixtures
+      - name: Generate sample PDF fixture
         shell: bash
-        run: |
-          bash internal/extract/gen-sample-pdf.bash
-          bash internal/extract/gen-invoice-png.bash
-          bash internal/extract/gen-sample-text-png.bash
-          bash internal/extract/gen-scanned-pdf.bash
-          bash internal/extract/gen-mixed-pdf.bash
+        run: bash internal/extract/gen-sample-pdf.bash
+
+      - name: Generate invoice PNG fixture
+        shell: bash
+        run: bash internal/extract/gen-invoice-png.bash
+
+      - name: Generate sample text PNG fixture
+        shell: bash
+        run: bash internal/extract/gen-sample-text-png.bash
+
+      - name: Generate scanned PDF fixture
+        shell: bash
+        run: bash internal/extract/gen-scanned-pdf.bash
+
+      - name: Generate mixed PDF fixture
+        shell: bash
+        run: bash internal/extract/gen-mixed-pdf.bash
 
       - name: Build
         run: go build ./...
 
-      - name: Print test seed
-        run: echo "MICASA_TEST_SEED=${{ github.run_id }}"
-
       - name: Test
+        if: runner.os != 'Windows' || runner.arch != 'ARM64'
         env:
-          CGO_ENABLED: ${{ (runner.os != 'Windows' || runner.arch != 'ARM64') && '1' || '0' }}
+          CGO_ENABLED: "1"
           MICASA_TEST_SEED: ${{ github.run_id }}
-        shell: bash
-        run: |
-          race=; [ "$CGO_ENABLED" = "1" ] && race="-race"
-          go test $race -shuffle on -timeout 5m -coverprofile coverage.txt ./...
+        run: go test -race -shuffle on -timeout 5m -coverprofile coverage.txt ./...
+
+      - name: Test (no race)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        env:
+          MICASA_TEST_SEED: ${{ github.run_id }}
+        run: go test -shuffle on -timeout 5m -coverprofile coverage.txt ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+        with:
+          files: coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Benchmarks (smoke)
         run: go test -bench . -benchtime 1x -timeout 5m -run '^$' ./...
-
-      - name: Coverage summary
-        run: go tool cover -func coverage.txt
 
   deadcode:
     name: Dead Code
@@ -133,10 +149,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
+        with:
+          go-version: "1.25"
 
       - name: Check for dead code
-        run: nix run '.#deadcode'
+        run: go run golang.org/x/tools/cmd/deadcode@v0.42.0 -test ./...
 
   pre-commit:
     name: Pre-commit
