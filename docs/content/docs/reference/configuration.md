@@ -85,8 +85,11 @@ micasa backup --source /path/to/micasa.db ~/backups/snapshot.db
 | Variable | Default | Config equivalent | Description |
 |----------|---------|-------------------|-------------|
 | `MICASA_DB_PATH` | [Platform default](#platform-data-directory) | -- | Database file path |
+| `MICASA_LLM_PROVIDER` | `ollama` | `llm.provider` | LLM provider name |
 | `OLLAMA_HOST` | `http://localhost:11434/v1` | `llm.base_url` | LLM API base URL |
+| `MICASA_LLM_BASE_URL` | `http://localhost:11434` | `llm.base_url` | LLM API base URL (alias for `OLLAMA_HOST`) |
 | `MICASA_LLM_MODEL` | `qwen3` | `llm.model` | LLM model name |
+| `MICASA_LLM_API_KEY` | (empty) | `llm.api_key` | LLM API key for cloud providers |
 | `MICASA_LLM_TIMEOUT` | `5s` | `llm.timeout` | LLM operation timeout |
 | `MICASA_MAX_DOCUMENT_SIZE` | `50 MiB` | `documents.max_file_size` | Max document import size |
 | `MICASA_CACHE_TTL` | `30d` | `documents.cache_ttl` | Document cache lifetime |
@@ -210,14 +213,22 @@ values you want to change.
 # micasa configuration
 
 [llm]
-# Base URL for an OpenAI-compatible API endpoint.
-# Ollama (default): http://localhost:11434/v1
-# llama.cpp:        http://localhost:8080/v1
-# LM Studio:        http://localhost:1234/v1
-base_url = "http://localhost:11434/v1"
+# LLM provider. Supported: ollama, anthropic, openai, openrouter,
+# deepseek, gemini, groq, mistral, llamacpp, llamafile.
+# Auto-detected from base_url and api_key when not set.
+# provider = "ollama"
+
+# Base URL for the provider's API. No /v1 suffix needed.
+# Ollama (default): http://localhost:11434
+# llama.cpp:        http://localhost:8080
+# LM Studio:        http://localhost:1234
+base_url = "http://localhost:11434"
 
 # Model name passed in chat requests.
 model = "qwen3"
+
+# API key for cloud providers. Not needed for local servers like Ollama.
+# api_key = ""
 
 # Optional: custom context appended to all system prompts.
 # Use this to inject domain-specific details about your house, region, etc.
@@ -274,8 +285,10 @@ model = "qwen3"
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `base_url` | string | `http://localhost:11434/v1` | Root URL of an OpenAI-compatible API. micasa appends `/chat/completions`, `/models`, etc. |
+| `provider` | string | `ollama` | LLM provider. Supported: `ollama`, `anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `groq`, `mistral`, `llamacpp`, `llamafile`. Auto-detected from `base_url` and `api_key` when not set. |
+| `base_url` | string | `http://localhost:11434` | Root URL of the provider's API. No `/v1` suffix needed -- each provider handles path construction. |
 | `model` | string | `qwen3` | Model identifier sent in chat requests. Must be available on the server. |
+| `api_key` | string | (empty) | Authentication credential. Required for cloud providers (Anthropic, OpenAI, etc.). Leave empty for local servers. |
 | `extra_context` | string | (empty) | Free-form text appended to all LLM system prompts. Useful for telling the model about your house or regional conventions. Currency is handled automatically via `[locale]`. |
 | `timeout` | string | `"5s"` | Max wait time for quick LLM operations (ping, model listing). Go duration syntax, e.g. `"10s"`, `"500ms"`. Increase for slow servers. |
 | `thinking` | bool | (unset) | Enable model thinking mode (e.g. qwen3 `<think>` blocks). Unset = don't send the option (server default). |
@@ -325,14 +338,36 @@ decimal places, etc.
 ### Supported LLM backends
 
 micasa talks to any server that implements the OpenAI chat completions API
-with streaming (SSE). [Ollama](https://ollama.com) is the primary tested
-backend:
+with streaming (SSE). All providers -- including Ollama -- communicate via
+OpenAI-compatible endpoints; there is no native SDK dependency on any
+provider.
+
+#### Local backends
+
+[Ollama](https://ollama.com) is the primary tested backend:
 
 | Backend | Default URL | Notes |
 |---------|-------------|-------|
 | [Ollama](https://ollama.com) | `http://localhost:11434/v1` | Default and tested. Models are pulled automatically if not present. |
 | [llama.cpp server](https://github.com/ggml-org/llama.cpp) | `http://localhost:8080/v1` | Should work (untested). Pass `--host` and `--port` when starting the server. |
+| [llamafile](https://github.com/Mozilla-Ocho/llamafile) | `http://localhost:8080/v1` | Single-file executable with built-in server. |
 | [LM Studio](https://lmstudio.ai) | `http://localhost:1234/v1` | Should work (untested). Enable the local server in LM Studio settings. |
+
+#### Cloud providers
+
+micasa also supports cloud LLM providers. Set `provider`, `base_url`, and
+`api_key` in the `[llm]` section. Cloud providers use their own default
+base URLs when none is configured.
+
+| Provider | Notes |
+|----------|-------|
+| [OpenAI](https://openai.com) | GPT-4o, o1, etc. |
+| [Anthropic](https://anthropic.com) | Claude models. Does not support model listing. |
+| [DeepSeek](https://deepseek.com) | DeepSeek-R1, DeepSeek-V3, etc. |
+| [Google Gemini](https://ai.google.dev) | Gemini models. |
+| [Groq](https://groq.com) | Fast inference for open models. |
+| [Mistral](https://mistral.ai) | Mistral and Mixtral models. |
+| [OpenRouter](https://openrouter.ai) | Multi-provider gateway. Uses the OpenAI protocol. |
 
 ### Override precedence
 
