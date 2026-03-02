@@ -34,7 +34,7 @@ func TestUserEditsHouseProfileAndSavesWithCtrlS(t *testing.T) {
 	require.Contains(t, m.statusView(), "saved", "user should be in form mode")
 
 	// User changes the nickname field.
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Beach House"
 	m.checkFormDirty()
@@ -58,7 +58,7 @@ func TestUserEditsHouseProfileThenSavesThenEditsAgain(t *testing.T) {
 	openHouseForm(m)
 
 	// First edit + save.
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Lake House"
 	m.checkFormDirty()
@@ -87,7 +87,7 @@ func TestUserAddsProjectAndSavesWithCtrlS(t *testing.T) {
 	openAddForm(m)
 	require.Contains(t, m.statusView(), "saved", "user should be in form mode")
 
-	values, ok := m.formData.(*projectFormData)
+	values, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	values.Title = "New Deck"
 	m.checkFormDirty()
@@ -110,7 +110,7 @@ func TestUserSeesStatusBarTransitionOnSave(t *testing.T) {
 	assert.NotContains(t, view, "unsaved")
 
 	// User edits a field — status bar flips to "unsaved".
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Updated"
 	m.checkFormDirty()
@@ -134,7 +134,7 @@ func TestUserCreatesMaintenanceWithDurationInterval(t *testing.T) {
 	openAddForm(m)
 	require.Contains(t, m.statusView(), "saved", "user should be in form mode")
 
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "HVAC Filter"
 	values.ScheduleType = schedInterval
@@ -164,7 +164,7 @@ func TestUserCreatesMaintenanceWithCombinedInterval(t *testing.T) {
 	openAddForm(m)
 	require.Contains(t, m.statusView(), "saved", "user should be in form mode")
 
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Gutter Cleaning"
 	values.ScheduleType = schedInterval
@@ -188,7 +188,7 @@ func TestUserCreatesMaintenanceWithIntervalOnly(t *testing.T) {
 	m.active = tabIndex(tabMaintenance)
 	openAddForm(m)
 
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "HVAC Filter"
 	values.ScheduleType = schedInterval
@@ -218,7 +218,7 @@ func TestUserCreatesMaintenanceWithDueDate(t *testing.T) {
 	m.active = tabIndex(tabMaintenance)
 	openAddForm(m)
 
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Inspect Roof"
 	values.ScheduleType = schedDueDate
@@ -256,7 +256,7 @@ func TestScheduleTypeSelectorIgnoresStaleValues(t *testing.T) {
 	m.active = tabIndex(tabMaintenance)
 	openAddForm(m)
 
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Selective"
 	values.ScheduleType = schedInterval
@@ -278,7 +278,7 @@ func TestUserCreatesMaintenanceUnscheduled(t *testing.T) {
 	m.active = tabIndex(tabMaintenance)
 	openAddForm(m)
 
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Unscheduled Task"
 	sendKey(m, "ctrl+s")
@@ -308,7 +308,7 @@ func TestUserEditsMaintenanceFromIntervalToDueDate(t *testing.T) {
 
 	// Create an item with an interval.
 	openAddForm(m)
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "HVAC Filter"
 	values.ScheduleType = schedInterval
@@ -332,7 +332,7 @@ func TestUserEditsMaintenanceFromIntervalToDueDate(t *testing.T) {
 	require.Equal(t, modeForm, m.mode, "should open full edit form")
 
 	// Verify current form values show the interval.
-	editValues, ok := m.formData.(*maintenanceFormData)
+	editValues, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	assert.Equal(t, "3m", editValues.IntervalMonths)
 	assert.Equal(t, schedInterval, editValues.ScheduleType)
@@ -373,7 +373,7 @@ func TestUserEditsMaintenanceFromDueDateToInterval(t *testing.T) {
 
 	// Create an item with a due date.
 	openAddForm(m)
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Roof Inspect"
 	values.ScheduleType = schedDueDate
@@ -397,7 +397,7 @@ func TestUserEditsMaintenanceFromDueDateToInterval(t *testing.T) {
 	require.Equal(t, modeForm, m.mode)
 
 	// Verify the edit form pre-populates schedule type as due_date.
-	editValues, ok := m.formData.(*maintenanceFormData)
+	editValues, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	assert.Equal(t, schedDueDate, editValues.ScheduleType)
 	assert.Equal(t, "2026-04-15", editValues.DueDate)
@@ -431,7 +431,7 @@ func TestUserEditsMaintenanceFromIntervalToNone(t *testing.T) {
 
 	// Create an item with an interval.
 	openAddForm(m)
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Filter Change"
 	values.ScheduleType = schedInterval
@@ -452,7 +452,7 @@ func TestUserEditsMaintenanceFromIntervalToNone(t *testing.T) {
 	sendKey(m, "e")
 	require.Equal(t, modeForm, m.mode)
 
-	editValues, ok := m.formData.(*maintenanceFormData)
+	editValues, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	assert.Equal(t, schedInterval, editValues.ScheduleType)
 
@@ -481,7 +481,7 @@ func TestScheduleTypeDueDateIgnoresStaleInterval(t *testing.T) {
 	m.active = tabIndex(tabMaintenance)
 	openAddForm(m)
 
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Stale Interval"
 	values.ScheduleType = schedDueDate
@@ -508,7 +508,7 @@ func TestScheduleTypeNoneIgnoresBothFields(t *testing.T) {
 	m.active = tabIndex(tabMaintenance)
 	openAddForm(m)
 
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Stale Both"
 	values.ScheduleType = schedNone
@@ -528,7 +528,7 @@ func TestUserCancelsFormWithEscAfterSaving(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Saved Then Cancelled"
 	m.checkFormDirty()
@@ -551,16 +551,16 @@ func TestUserEscDirtyFormShowsConfirmation(t *testing.T) {
 	openHouseForm(m)
 
 	// User edits a field, making the form dirty.
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Unsaved Change"
 	m.checkFormDirty()
-	require.True(t, m.formDirty, "form should be dirty after edit")
+	require.True(t, m.fs.formDirty, "form should be dirty after edit")
 
 	// User presses ESC — should see confirmation instead of exiting.
 	sendKey(m, "esc")
 	assert.Equal(t, modeForm, m.mode, "should still be in form mode")
-	assert.True(t, m.confirmDiscard, "confirm dialog should be active")
+	assert.True(t, m.fs.confirmDiscard, "confirm dialog should be active")
 	status := m.statusView()
 	assert.Contains(t, status, "Discard unsaved changes?")
 	assert.Contains(t, status, "discard")
@@ -571,18 +571,18 @@ func TestUserConfirmsDiscardWithY(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Will Be Discarded"
 	m.checkFormDirty()
 
 	// ESC triggers confirmation, y discards.
 	sendKey(m, "esc")
-	require.True(t, m.confirmDiscard)
+	require.True(t, m.fs.confirmDiscard)
 	sendKey(m, "y")
-	assert.False(t, m.confirmDiscard, "confirm dialog should be dismissed")
+	assert.False(t, m.fs.confirmDiscard, "confirm dialog should be dismissed")
 	assert.NotEqual(t, modeForm, m.mode, "should have exited form mode")
-	assert.Nil(t, m.form, "form should be nil after discard")
+	assert.Nil(t, m.fs.form, "form should be nil after discard")
 
 	// Database should still have the original value, not the discarded edit.
 	require.NoError(t, m.loadHouse())
@@ -593,18 +593,18 @@ func TestUserCancelsDiscardWithN(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Keep This Edit"
 	m.checkFormDirty()
 
 	// ESC triggers confirmation, n cancels it.
 	sendKey(m, "esc")
-	require.True(t, m.confirmDiscard)
+	require.True(t, m.fs.confirmDiscard)
 	sendKey(m, "n")
-	assert.False(t, m.confirmDiscard, "confirm dialog should be dismissed")
+	assert.False(t, m.fs.confirmDiscard, "confirm dialog should be dismissed")
 	assert.Equal(t, modeForm, m.mode, "should remain in form mode")
-	assert.NotNil(t, m.form, "form should still be open")
+	assert.NotNil(t, m.fs.form, "form should still be open")
 
 	// The unsaved edit should still be in the form data.
 	assert.Equal(t, "Keep This Edit", values.Nickname)
@@ -614,16 +614,16 @@ func TestUserCancelsDiscardWithEsc(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Keep Editing"
 	m.checkFormDirty()
 
 	// ESC triggers confirmation, a second ESC cancels it.
 	sendKey(m, "esc")
-	require.True(t, m.confirmDiscard)
+	require.True(t, m.fs.confirmDiscard)
 	sendKey(m, "esc")
-	assert.False(t, m.confirmDiscard, "confirm dialog should be dismissed")
+	assert.False(t, m.fs.confirmDiscard, "confirm dialog should be dismissed")
 	assert.Equal(t, modeForm, m.mode, "should remain in form mode")
 }
 
@@ -632,9 +632,9 @@ func TestCleanFormExitsImmediatelyOnEsc(t *testing.T) {
 	openHouseForm(m)
 
 	// Form is clean (no edits), so ESC should exit immediately.
-	require.False(t, m.formDirty)
+	require.False(t, m.fs.formDirty)
 	sendKey(m, "esc")
-	assert.False(t, m.confirmDiscard, "confirm should not appear for clean forms")
+	assert.False(t, m.fs.confirmDiscard, "confirm should not appear for clean forms")
 	assert.NotEqual(t, modeForm, m.mode, "should exit form on ESC when clean")
 }
 
@@ -642,19 +642,19 @@ func TestConfirmDiscardSwallowsOtherKeys(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Dirty"
 	m.checkFormDirty()
 
 	sendKey(m, "esc")
-	require.True(t, m.confirmDiscard)
+	require.True(t, m.fs.confirmDiscard)
 
 	// Keys other than y/n/esc should be swallowed.
 	sendKey(m, "a")
-	assert.True(t, m.confirmDiscard, "confirm should still be active after 'a'")
+	assert.True(t, m.fs.confirmDiscard, "confirm should still be active after 'a'")
 	sendKey(m, "x")
-	assert.True(t, m.confirmDiscard, "confirm should still be active after 'x'")
+	assert.True(t, m.fs.confirmDiscard, "confirm should still be active after 'x'")
 	assert.Equal(t, modeForm, m.mode, "should remain in form mode")
 }
 
@@ -663,16 +663,16 @@ func TestSavedFormExitsImmediatelyOnEsc(t *testing.T) {
 	openHouseForm(m)
 
 	// Edit, save in place, then ESC — form is clean after save.
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Saved Edit"
 	m.checkFormDirty()
 	sendKey(m, "ctrl+s")
-	require.False(t, m.formDirty, "form should be clean after ctrl+s")
+	require.False(t, m.fs.formDirty, "form should be clean after ctrl+s")
 
 	// ESC should exit immediately since form is no longer dirty.
 	sendKey(m, "esc")
-	assert.False(t, m.confirmDiscard, "no confirm needed after save")
+	assert.False(t, m.fs.confirmDiscard, "no confirm needed after save")
 	assert.NotEqual(t, modeForm, m.mode, "should exit form mode")
 
 	// Saved data should persist.
@@ -684,16 +684,16 @@ func TestCtrlQDirtyFormShowsConfirmation(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Unsaved Quit"
 	m.checkFormDirty()
-	require.True(t, m.formDirty)
+	require.True(t, m.fs.formDirty)
 
 	// ctrl+q on a dirty form should show confirmation, not quit.
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
 	assert.Nil(t, cmd, "should not quit immediately")
-	assert.True(t, m.confirmDiscard, "confirm dialog should be active")
+	assert.True(t, m.fs.confirmDiscard, "confirm dialog should be active")
 	assert.Equal(t, modeForm, m.mode, "should still be in form mode")
 }
 
@@ -701,14 +701,14 @@ func TestCtrlQDirtyFormConfirmQuits(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Will Quit"
 	m.checkFormDirty()
 
 	// ctrl+q triggers confirmation, y quits.
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
-	require.True(t, m.confirmDiscard)
+	require.True(t, m.fs.confirmDiscard)
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 	assert.NotNil(t, cmd, "y after ctrl+q should return quit command")
 
@@ -721,30 +721,30 @@ func TestCtrlQDirtyFormCancelStaysInForm(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.Nickname = "Keep Editing"
 	m.checkFormDirty()
 
 	// ctrl+q triggers confirmation, n cancels.
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
-	require.True(t, m.confirmDiscard)
+	require.True(t, m.fs.confirmDiscard)
 	sendKey(m, "n")
-	assert.False(t, m.confirmDiscard, "confirm should be dismissed")
-	assert.False(t, m.confirmQuit, "quit flag should be cleared")
+	assert.False(t, m.fs.confirmDiscard, "confirm should be dismissed")
+	assert.False(t, m.fs.confirmQuit, "quit flag should be cleared")
 	assert.Equal(t, modeForm, m.mode, "should remain in form mode")
-	assert.NotNil(t, m.form, "form should still be open")
+	assert.NotNil(t, m.fs.form, "form should still be open")
 }
 
 func TestCtrlQCleanFormQuitsImmediately(t *testing.T) {
 	m := newTestModelWithStore(t)
 	openHouseForm(m)
-	require.False(t, m.formDirty)
+	require.False(t, m.fs.formDirty)
 
 	// ctrl+q on a clean form should quit immediately.
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlQ})
 	assert.NotNil(t, cmd, "clean form ctrl+q should quit immediately")
-	assert.False(t, m.confirmDiscard, "no confirm needed for clean form")
+	assert.False(t, m.fs.confirmDiscard, "no confirm needed for clean form")
 }
 
 func TestUserCreatesIncidentWithRelativeDateYesterday(t *testing.T) {
@@ -757,7 +757,7 @@ func TestUserCreatesIncidentWithRelativeDateYesterday(t *testing.T) {
 	openAddForm(m)
 	require.Contains(t, m.statusView(), "saved", "user should be in form mode")
 
-	values, ok := m.formData.(*incidentFormData)
+	values, ok := m.fs.formData.(*incidentFormData)
 	require.True(t, ok, "form data should be incidentFormData")
 
 	// User types "yesterday" in the date noticed field instead of YYYY-MM-DD.
@@ -790,7 +790,7 @@ func TestUserCreatesIncidentWithRelativeDateToday(t *testing.T) {
 	openAddForm(m)
 	require.Contains(t, m.statusView(), "saved")
 
-	values, ok := m.formData.(*incidentFormData)
+	values, ok := m.fs.formData.(*incidentFormData)
 	require.True(t, ok)
 
 	values.Title = "Power outage"
@@ -814,7 +814,7 @@ func TestCtrlSSaveClearsStatusErrorAfterRetry(t *testing.T) {
 	openHouseForm(m)
 
 	// User enters an invalid year.
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 	values.YearBuilt = "abc"
 	m.checkFormDirty()
@@ -843,7 +843,7 @@ func TestDateParserRejectsGarbageInput(t *testing.T) {
 	m.active = tabIndex(tabIncidents)
 	openAddForm(m)
 
-	values, ok := m.formData.(*incidentFormData)
+	values, ok := m.fs.formData.(*incidentFormData)
 	require.True(t, ok)
 	values.Title = "Test Incident"
 	values.DateNoticed = "nope"

@@ -139,8 +139,8 @@ func TestUndoKeyIgnoredInNormalMode(t *testing.T) {
 
 func TestSnapshotForUndoSkipsCreates(t *testing.T) {
 	m := newTestModel()
-	m.editID = nil
-	m.formKind = formProject
+	m.fs.editID = nil
+	m.fs.formKind = formProject
 
 	m.snapshotForUndo()
 
@@ -222,8 +222,8 @@ func TestNewEditClearsRedoStack(t *testing.T) {
 	// Since editID is nil and formKind is not formHouse, nothing is pushed,
 	// but the real test is that a successful push clears redo.
 	// We test the mechanism directly instead.
-	m.editID = nil
-	m.formKind = formProject
+	m.fs.editID = nil
+	m.fs.formKind = formProject
 	m.snapshotForUndo()
 
 	// editID nil means no push, redo should be unchanged (no new edit happened).

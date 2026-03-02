@@ -960,13 +960,17 @@ func TestEmptyHintPerTab(t *testing.T) {
 		{tabProjects, "No projects yet", "edit mode"},
 		{tabQuotes, "No quotes yet", "Create a project first"},
 		{tabMaintenance, "No maintenance items yet", "edit mode"},
+		{tabIncidents, "No incidents yet", "edit mode"},
 		{tabAppliances, "No appliances yet", "edit mode"},
 		{tabVendors, "No vendors yet", "edit mode"},
+		{tabDocuments, "No documents yet", ""},
 	}
 	for _, tt := range tests {
 		hint := topLevelEmptyHint(tt.kind)
 		assert.Contains(t, hint, tt.want)
-		assert.Contains(t, hint, tt.wantSub)
+		if tt.wantSub != "" {
+			assert.Contains(t, hint, tt.wantSub)
+		}
 	}
 }
 
@@ -1057,7 +1061,7 @@ func TestRequiredLegendShownOnMultiFieldForm(t *testing.T) {
 	m.width = 120
 	m.height = 40
 	m.startProjectForm()
-	m.form.Init()
+	m.fs.form.Init()
 
 	output := m.buildView()
 	assert.Contains(t, output, "required",
@@ -1069,7 +1073,7 @@ func TestRequiredLegendShownOnFullScreenHouseForm(t *testing.T) {
 	m.width = 120
 	m.height = 40
 	m.startHouseForm()
-	m.form.Init()
+	m.fs.form.Init()
 
 	// House form renders via formFullScreen, not buildBaseView.
 	output := m.buildView()
@@ -1084,8 +1088,8 @@ func TestRequiredLegendHiddenOnInlineEdit(t *testing.T) {
 
 	// Create a project so we can inline-edit it.
 	m.startProjectForm()
-	m.form.Init()
-	values, ok := m.formData.(*projectFormData)
+	m.fs.form.Init()
+	values, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	values.Title = testProjectTitle
 	require.NoError(t, m.submitProjectForm())
@@ -1095,7 +1099,7 @@ func TestRequiredLegendHiddenOnInlineEdit(t *testing.T) {
 	// Inline-edit the Status column -- a Select via openInlineEdit.
 	require.NoError(t, m.inlineEditProject(1, projectColStatus))
 	require.Equal(t, modeForm, m.mode, "inline edit should activate form mode")
-	m.form.Init()
+	m.fs.form.Init()
 
 	output := m.buildView()
 	assert.NotContains(t, output, "required",
@@ -1121,7 +1125,7 @@ func TestFirstRunHouseFormShowsHint(t *testing.T) {
 	// Simulate first run: no house profile exists yet.
 	m.hasHouse = false
 	m.startHouseForm()
-	m.form.Init()
+	m.fs.form.Init()
 
 	output := m.buildView()
 	assert.Contains(t, output, "edit the rest anytime",
@@ -1132,9 +1136,83 @@ func TestEditHouseFormHidesHint(t *testing.T) {
 	m := newTestModelWithStore(t)
 	// Model already has a house from newTestModelWithStore.
 	openHouseForm(m)
-	m.form.Init()
+	m.fs.form.Init()
 
 	output := m.buildView()
 	assert.NotContains(t, output, "edit the rest anytime",
 		"editing existing house profile should not show first-run hint")
+}
+
+func TestPluralCoversAllTabKinds(t *testing.T) {
+	tests := []struct {
+		kind TabKind
+		want string
+	}{
+		{tabProjects, "projects"},
+		{tabQuotes, "quotes"},
+		{tabMaintenance, "maintenance items"},
+		{tabIncidents, "incidents"},
+		{tabAppliances, "appliances"},
+		{tabVendors, "vendors"},
+		{tabDocuments, "documents"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.kind.plural())
+	}
+}
+
+func TestOverlayMaxHeightClampsSmallTerminal(t *testing.T) {
+	m := newTestModel()
+	m.height = 10
+	h := m.overlayMaxHeight()
+	assert.Equal(t, 10, h, "should clamp to minimum of 10")
+}
+
+func TestOverlayMaxHeightNormalTerminal(t *testing.T) {
+	m := newTestModel()
+	m.height = 40
+	h := m.overlayMaxHeight()
+	assert.Equal(t, m.effectiveHeight()-4, h)
+}
+
+func TestNaturalWidthsIndirectMatchesDirect(t *testing.T) {
+	specs := []columnSpec{
+		{Title: "ID", Min: 2, Max: 6},
+		{Title: "Name", Min: 4, Max: 20},
+	}
+	fullRows := [][]cell{
+		{{Value: "1"}, {Value: "alpha"}, {Value: "extra"}},
+		{{Value: "2"}, {Value: "beta"}, {Value: "extra"}},
+	}
+	visToFull := []int{0, 1}
+	indirect := naturalWidthsIndirect(specs, fullRows, visToFull, "$")
+	direct := naturalWidths(specs, fullRows, "$")
+	assert.Equal(t, direct, indirect)
+}
+
+func TestNaturalWidthsIndirectRemappedColumns(t *testing.T) {
+	specs := []columnSpec{
+		{Title: "Name", Min: 4, Max: 20},
+	}
+	fullRows := [][]cell{
+		{{Value: "1"}, {Value: "alpha"}, {Value: "extra"}},
+	}
+	visToFull := []int{1}
+	widths := naturalWidthsIndirect(specs, fullRows, visToFull, "$")
+	require.Len(t, widths, 1)
+	assert.GreaterOrEqual(t, widths[0], lipgloss.Width("alpha"))
+}
+
+func TestComputeNaturalWidthsSkipsShortRows(t *testing.T) {
+	specs := []columnSpec{
+		{Title: "A", Min: 2, Max: 10},
+		{Title: "B", Min: 2, Max: 10},
+	}
+	rows := [][]cell{
+		{{Value: "x"}},
+	}
+	widths := naturalWidths(specs, rows, "$")
+	require.Len(t, widths, 2)
+	assert.GreaterOrEqual(t, widths[0], 2)
+	assert.GreaterOrEqual(t, widths[1], 2)
 }

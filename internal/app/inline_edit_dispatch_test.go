@@ -14,8 +14,8 @@ func TestInlineEditProjectTextColumnOpensInlineInput(t *testing.T) {
 	m := newTestModelWithStore(t)
 	// Create a project.
 	m.startProjectForm()
-	m.form.Init()
-	values, ok := m.formData.(*projectFormData)
+	m.fs.form.Init()
+	values, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Title = testProjectTitle
 	require.NoError(t, m.submitProjectForm())
@@ -32,8 +32,8 @@ func TestInlineEditProjectTextColumnOpensInlineInput(t *testing.T) {
 func TestInlineEditProjectSelectColumnOpensFormOverlay(t *testing.T) {
 	m := newTestModelWithStore(t)
 	m.startProjectForm()
-	m.form.Init()
-	values, ok := m.formData.(*projectFormData)
+	m.fs.form.Init()
+	values, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Title = testProjectTitle
 	require.NoError(t, m.submitProjectForm())
@@ -49,8 +49,8 @@ func TestInlineEditProjectSelectColumnOpensFormOverlay(t *testing.T) {
 func TestInlineEditVendorTextColumnsUseInlineInput(t *testing.T) {
 	m := newTestModelWithStore(t)
 	m.startVendorForm()
-	m.form.Init()
-	values, ok := m.formData.(*vendorFormData)
+	m.fs.form.Init()
+	values, ok := m.fs.formData.(*vendorFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Name = "Test Vendor"
 	require.NoError(t, m.submitVendorForm())
@@ -79,8 +79,8 @@ func TestInlineEditVendorTextColumnsUseInlineInput(t *testing.T) {
 func TestInlineEditAppliaceDateColumnOpensCalendar(t *testing.T) {
 	m := newTestModelWithStore(t)
 	m.startApplianceForm()
-	m.form.Init()
-	values, ok := m.formData.(*applianceFormData)
+	m.fs.form.Init()
+	values, ok := m.fs.formData.(*applianceFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Name = "Test Fridge"
 	require.NoError(t, m.submitApplianceForm())
@@ -97,8 +97,8 @@ func TestShiftEOpensFullEditFormRegardlessOfColumn(t *testing.T) {
 	m := newTestModelWithStore(t)
 	// Create a vendor so there's data to edit.
 	m.startVendorForm()
-	m.form.Init()
-	values, ok := m.formData.(*vendorFormData)
+	m.fs.form.Init()
+	values, ok := m.fs.formData.(*vendorFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Name = "Test Vendor"
 	require.NoError(t, m.submitVendorForm())
@@ -134,8 +134,8 @@ func TestEditKeyDispatchesInlineEditInEditMode(t *testing.T) {
 	m := newTestModelWithStore(t)
 	// Create a vendor so there's data to edit.
 	m.startVendorForm()
-	m.form.Init()
-	values, ok := m.formData.(*vendorFormData)
+	m.fs.form.Init()
+	values, ok := m.fs.formData.(*vendorFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Name = "Test Vendor"
 	require.NoError(t, m.submitVendorForm())

@@ -22,7 +22,7 @@ type undoEntry struct {
 // entry. Only applies to edits (editID != nil or house form), not creates.
 // Clears the redo stack since a new forward edit invalidates redo history.
 func (m *Model) snapshotForUndo() {
-	if m.formKind == formHouse {
+	if m.fs.formKind == formHouse {
 		if !m.hasHouse {
 			return
 		}
@@ -34,10 +34,10 @@ func (m *Model) snapshotForUndo() {
 		return
 	}
 
-	if m.editID == nil {
+	if m.fs.editID == nil {
 		return
 	}
-	entry, ok := m.snapshotEntity(m.formKind, *m.editID)
+	entry, ok := m.snapshotEntity(m.fs.formKind, *m.fs.editID)
 	if ok {
 		m.pushUndo(entry)
 		m.redoStack = nil

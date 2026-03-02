@@ -13,11 +13,11 @@ import (
 // formFieldLabels initializes the form and returns the rendered view text.
 // Callers check for presence/absence of field labels.
 func formFieldLabels(m *Model) string {
-	if m.form == nil {
+	if m.fs.form == nil {
 		return ""
 	}
-	m.form.Init()
-	return m.form.View()
+	m.fs.form.Init()
+	return m.fs.form.View()
 }
 
 func TestSaveFormFocusesNewItem(t *testing.T) {
@@ -25,7 +25,7 @@ func TestSaveFormFocusesNewItem(t *testing.T) {
 
 	// Create first project via user interaction.
 	openAddForm(m)
-	v1, ok := m.formData.(*projectFormData)
+	v1, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	v1.Title = "First"
 	sendKey(m, "ctrl+s")
@@ -37,7 +37,7 @@ func TestSaveFormFocusesNewItem(t *testing.T) {
 
 	// Create second project; cursor should move to the new item.
 	openAddForm(m)
-	v2, ok := m.formData.(*projectFormData)
+	v2, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	v2.Title = "Second"
 	sendKey(m, "ctrl+s")
@@ -57,7 +57,7 @@ func TestSaveFormInPlaceThenEscFocusesNewItem(t *testing.T) {
 
 	// Seed an existing project so the cursor starts on something else.
 	openAddForm(m)
-	v1, ok := m.formData.(*projectFormData)
+	v1, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	v1.Title = "Existing"
 	sendKey(m, "ctrl+s")
@@ -69,12 +69,12 @@ func TestSaveFormInPlaceThenEscFocusesNewItem(t *testing.T) {
 
 	// Start a new add form, save in place (Ctrl+S), then exit (Esc).
 	openAddForm(m)
-	v2, ok := m.formData.(*projectFormData)
+	v2, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	v2.Title = "Via CtrlS"
 	sendKey(m, "ctrl+s")
-	require.NotNil(t, m.editID, "editID should be set after save-in-place create")
-	newID := *m.editID
+	require.NotNil(t, m.fs.editID, "editID should be set after save-in-place create")
+	newID := *m.fs.editID
 
 	// Esc closes the form (clean after Ctrl+S snapshot).
 	sendKey(m, "esc")
@@ -92,7 +92,7 @@ func TestSaveFormInPlaceThenDiscardFocusesNewItem(t *testing.T) {
 
 	// Seed an existing project.
 	openAddForm(m)
-	v1, ok := m.formData.(*projectFormData)
+	v1, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	v1.Title = "Existing"
 	sendKey(m, "ctrl+s")
@@ -100,21 +100,21 @@ func TestSaveFormInPlaceThenDiscardFocusesNewItem(t *testing.T) {
 
 	// Start add form, save in place, then make the form dirty.
 	openAddForm(m)
-	v2, ok := m.formData.(*projectFormData)
+	v2, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	v2.Title = "Saved InPlace"
 	sendKey(m, "ctrl+s")
-	require.NotNil(t, m.editID)
-	newID := *m.editID
+	require.NotNil(t, m.fs.editID)
+	newID := *m.fs.editID
 
 	// Mutate form data after snapshot to make it dirty.
 	v2.Title = "Unsaved Change"
 	m.checkFormDirty()
-	require.True(t, m.formDirty, "form should be dirty after mutation")
+	require.True(t, m.fs.formDirty, "form should be dirty after mutation")
 
 	// Esc on dirty form triggers confirm dialog, y confirms discard.
 	sendKey(m, "esc")
-	require.True(t, m.confirmDiscard, "dirty form esc should show confirm dialog")
+	require.True(t, m.fs.confirmDiscard, "dirty form esc should show confirm dialog")
 	sendKey(m, "y")
 
 	meta, ok := m.selectedRowMeta()
@@ -128,17 +128,17 @@ func TestSaveFormInPlaceTwiceThenEscFocusesItem(t *testing.T) {
 	m := newTestModelWithStore(t)
 
 	openAddForm(m)
-	v, ok := m.formData.(*projectFormData)
+	v, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	v.Title = "Initial"
 	sendKey(m, "ctrl+s")
-	require.NotNil(t, m.editID)
-	createdID := *m.editID
+	require.NotNil(t, m.fs.editID)
+	createdID := *m.fs.editID
 
 	// Second save -- now an update since editID is set.
 	v.Title = "Updated"
 	sendKey(m, "ctrl+s")
-	assert.Equal(t, createdID, *m.editID, "editID should not change on update")
+	assert.Equal(t, createdID, *m.fs.editID, "editID should not change on update")
 
 	sendKey(m, "esc")
 
@@ -157,7 +157,7 @@ func TestEditExistingThenEscKeepsCursor(t *testing.T) {
 	// Create two projects via user interaction.
 	for _, title := range []string{"Alpha", "Beta"} {
 		openAddForm(m)
-		v, ok := m.formData.(*projectFormData)
+		v, ok := m.fs.formData.(*projectFormData)
 		require.True(t, ok)
 		v.Title = title
 		sendKey(m, "ctrl+s")
@@ -193,7 +193,7 @@ func TestExitFormWithNoSaveNoCursorMove(t *testing.T) {
 
 	// Create a project so we have a row to be on.
 	openAddForm(m)
-	v, ok := m.formData.(*projectFormData)
+	v, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	v.Title = "Only"
 	sendKey(m, "ctrl+s")
@@ -205,7 +205,7 @@ func TestExitFormWithNoSaveNoCursorMove(t *testing.T) {
 
 	// Open add form and immediately abort -- no save.
 	openAddForm(m)
-	require.Nil(t, m.editID, "editID should be nil for a new add form")
+	require.Nil(t, m.fs.editID, "editID should be nil for a new add form")
 	sendKey(m, "esc")
 
 	meta, ok = m.selectedRowMeta()
@@ -232,7 +232,7 @@ func TestEditProjectFormHasMoreFieldsThanAdd(t *testing.T) {
 	m := newTestModelWithStore(t)
 	// Create a project via user interaction.
 	openAddForm(m)
-	values, ok := m.formData.(*projectFormData)
+	values, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Title = testProjectTitle
 	sendKey(m, "ctrl+s")
@@ -270,7 +270,7 @@ func TestEditVendorFormHasAllFields(t *testing.T) {
 	m.active = tabIndex(tabVendors)
 	// Create a vendor via user interaction.
 	openAddForm(m)
-	values, ok := m.formData.(*vendorFormData)
+	values, ok := m.fs.formData.(*vendorFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Name = "Test Vendor"
 	sendKey(m, "ctrl+s")
@@ -319,7 +319,7 @@ func TestAddQuoteFormHasOnlyEssentialFields(t *testing.T) {
 	m := newTestModelWithStore(t)
 	// Need a project first.
 	openAddForm(m)
-	values, ok := m.formData.(*projectFormData)
+	values, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok, "unexpected form data type")
 	values.Title = testProjectTitle
 	sendKey(m, "ctrl+s")

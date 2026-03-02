@@ -22,9 +22,9 @@ func TestProjectHandlerStartAddForm(t *testing.T) {
 	h := projectHandler{}
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formProject, m.formKind)
-	assert.IsType(t, &projectFormData{}, m.formData)
-	assert.NotNil(t, m.form)
+	assert.Equal(t, formProject, m.fs.formKind)
+	assert.IsType(t, &projectFormData{}, m.fs.formData)
+	assert.NotNil(t, m.fs.form)
 }
 
 func TestQuoteHandlerStartAddFormRequiresProject(t *testing.T) {
@@ -49,8 +49,8 @@ func TestQuoteHandlerStartAddFormWithProject(t *testing.T) {
 
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formQuote, m.formKind)
-	assert.IsType(t, &quoteFormData{}, m.formData)
+	assert.Equal(t, formQuote, m.fs.formKind)
+	assert.IsType(t, &quoteFormData{}, m.fs.formData)
 }
 
 func TestMaintenanceHandlerStartAddForm(t *testing.T) {
@@ -58,8 +58,8 @@ func TestMaintenanceHandlerStartAddForm(t *testing.T) {
 	h := maintenanceHandler{}
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formMaintenance, m.formKind)
-	assert.IsType(t, &maintenanceFormData{}, m.formData)
+	assert.Equal(t, formMaintenance, m.fs.formKind)
+	assert.IsType(t, &maintenanceFormData{}, m.fs.formData)
 }
 
 func TestApplianceHandlerStartAddForm(t *testing.T) {
@@ -67,8 +67,8 @@ func TestApplianceHandlerStartAddForm(t *testing.T) {
 	h := applianceHandler{}
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formAppliance, m.formKind)
-	assert.IsType(t, &applianceFormData{}, m.formData)
+	assert.Equal(t, formAppliance, m.fs.formKind)
+	assert.IsType(t, &applianceFormData{}, m.fs.formData)
 }
 
 func TestVendorHandlerStartAddForm(t *testing.T) {
@@ -76,8 +76,8 @@ func TestVendorHandlerStartAddForm(t *testing.T) {
 	h := vendorHandler{}
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formVendor, m.formKind)
-	assert.IsType(t, &vendorFormData{}, m.formData)
+	assert.Equal(t, formVendor, m.fs.formKind)
+	assert.IsType(t, &vendorFormData{}, m.fs.formData)
 }
 
 func TestIncidentHandlerStartAddForm(t *testing.T) {
@@ -85,8 +85,8 @@ func TestIncidentHandlerStartAddForm(t *testing.T) {
 	h := incidentHandler{}
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formIncident, m.formKind)
-	assert.IsType(t, &incidentFormData{}, m.formData)
+	assert.Equal(t, formIncident, m.fs.formKind)
+	assert.IsType(t, &incidentFormData{}, m.fs.formData)
 }
 
 func TestServiceLogHandlerStartAddForm(t *testing.T) {
@@ -103,9 +103,9 @@ func TestServiceLogHandlerStartAddForm(t *testing.T) {
 	h := serviceLogHandler{maintenanceItemID: maintID}
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formServiceLog, m.formKind)
-	assert.IsType(t, &serviceLogFormData{}, m.formData)
-	fd, ok := m.formData.(*serviceLogFormData)
+	assert.Equal(t, formServiceLog, m.fs.formKind)
+	assert.IsType(t, &serviceLogFormData{}, m.fs.formData)
+	fd, ok := m.fs.formData.(*serviceLogFormData)
 	require.True(t, ok, "formData should be *serviceLogFormData")
 	assert.Equal(t, maintID, fd.MaintenanceItemID)
 }
@@ -115,8 +115,8 @@ func TestDocumentHandlerStartAddForm(t *testing.T) {
 	h := documentHandler{}
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formDocument, m.formKind)
-	assert.IsType(t, &documentFormData{}, m.formData)
+	assert.Equal(t, formDocument, m.fs.formKind)
+	assert.IsType(t, &documentFormData{}, m.fs.formData)
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ func TestProjectHandlerStartEditForm(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := projectHandler{}
 
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Edit Me",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusPlanned,
@@ -139,10 +139,10 @@ func TestProjectHandlerStartEditForm(t *testing.T) {
 	m.exitForm()
 	require.NoError(t, h.StartEditForm(m, id))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formProject, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, id, *m.editID)
-	fd, ok := m.formData.(*projectFormData)
+	assert.Equal(t, formProject, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, id, *m.fs.editID)
+	fd, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Edit Me", fd.Title)
 }
@@ -166,7 +166,7 @@ func TestQuoteHandlerStartEditForm(t *testing.T) {
 	}))
 	projects, _ := m.store.ListProjects(false)
 
-	m.formData = &quoteFormData{
+	m.fs.formData = &quoteFormData{
 		ProjectID:  projects[0].ID,
 		VendorName: "EditQuoteCo",
 		Total:      "800.00",
@@ -178,10 +178,10 @@ func TestQuoteHandlerStartEditForm(t *testing.T) {
 	m.exitForm()
 	require.NoError(t, h.StartEditForm(m, id))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formQuote, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, id, *m.editID)
-	fd, ok := m.formData.(*quoteFormData)
+	assert.Equal(t, formQuote, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, id, *m.fs.editID)
+	fd, ok := m.fs.formData.(*quoteFormData)
 	require.True(t, ok)
 	assert.Equal(t, "EditQuoteCo", fd.VendorName)
 }
@@ -198,7 +198,7 @@ func TestMaintenanceHandlerStartEditForm(t *testing.T) {
 	h := maintenanceHandler{}
 	cats, _ := m.store.MaintenanceCategories()
 
-	m.formData = &maintenanceFormData{
+	m.fs.formData = &maintenanceFormData{
 		Name:         "Edit Maint",
 		CategoryID:   cats[0].ID,
 		ScheduleType: schedNone,
@@ -210,10 +210,10 @@ func TestMaintenanceHandlerStartEditForm(t *testing.T) {
 	m.exitForm()
 	require.NoError(t, h.StartEditForm(m, id))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formMaintenance, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, id, *m.editID)
-	fd, ok := m.formData.(*maintenanceFormData)
+	assert.Equal(t, formMaintenance, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, id, *m.fs.editID)
+	fd, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Edit Maint", fd.Name)
 }
@@ -229,7 +229,7 @@ func TestApplianceHandlerStartEditForm(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := applianceHandler{}
 
-	m.formData = &applianceFormData{Name: "Edit Fridge"}
+	m.fs.formData = &applianceFormData{Name: "Edit Fridge"}
 	require.NoError(t, h.SubmitForm(m))
 	_, meta, _, _ := h.Load(m.store, false)
 	id := meta[0].ID
@@ -237,10 +237,10 @@ func TestApplianceHandlerStartEditForm(t *testing.T) {
 	m.exitForm()
 	require.NoError(t, h.StartEditForm(m, id))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formAppliance, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, id, *m.editID)
-	fd, ok := m.formData.(*applianceFormData)
+	assert.Equal(t, formAppliance, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, id, *m.fs.editID)
+	fd, ok := m.fs.formData.(*applianceFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Edit Fridge", fd.Name)
 }
@@ -256,7 +256,7 @@ func TestVendorHandlerStartEditForm(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := vendorHandler{}
 
-	m.formData = &vendorFormData{Name: "Edit Vendor Co"}
+	m.fs.formData = &vendorFormData{Name: "Edit Vendor Co"}
 	require.NoError(t, h.SubmitForm(m))
 	_, meta, _, _ := h.Load(m.store, false)
 	id := meta[0].ID
@@ -264,10 +264,10 @@ func TestVendorHandlerStartEditForm(t *testing.T) {
 	m.exitForm()
 	require.NoError(t, h.StartEditForm(m, id))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formVendor, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, id, *m.editID)
-	fd, ok := m.formData.(*vendorFormData)
+	assert.Equal(t, formVendor, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, id, *m.fs.editID)
+	fd, ok := m.fs.formData.(*vendorFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Edit Vendor Co", fd.Name)
 }
@@ -283,7 +283,7 @@ func TestIncidentHandlerStartEditForm(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := incidentHandler{}
 
-	m.formData = &incidentFormData{
+	m.fs.formData = &incidentFormData{
 		Title:       "Edit Incident",
 		Status:      data.IncidentStatusOpen,
 		Severity:    data.IncidentSeveritySoon,
@@ -296,10 +296,10 @@ func TestIncidentHandlerStartEditForm(t *testing.T) {
 	m.exitForm()
 	require.NoError(t, h.StartEditForm(m, id))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formIncident, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, id, *m.editID)
-	fd, ok := m.formData.(*incidentFormData)
+	assert.Equal(t, formIncident, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, id, *m.fs.editID)
+	fd, ok := m.fs.formData.(*incidentFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Edit Incident", fd.Title)
 }
@@ -323,7 +323,7 @@ func TestServiceLogHandlerStartEditForm(t *testing.T) {
 	maintID := items[0].ID
 
 	h := serviceLogHandler{maintenanceItemID: maintID}
-	m.formData = &serviceLogFormData{
+	m.fs.formData = &serviceLogFormData{
 		MaintenanceItemID: maintID,
 		ServicedAt:        "2026-01-20",
 		Notes:             "test log",
@@ -335,10 +335,10 @@ func TestServiceLogHandlerStartEditForm(t *testing.T) {
 	m.exitForm()
 	require.NoError(t, h.StartEditForm(m, id))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formServiceLog, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, id, *m.editID)
-	fd, ok := m.formData.(*serviceLogFormData)
+	assert.Equal(t, formServiceLog, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, id, *m.fs.editID)
+	fd, ok := m.fs.formData.(*serviceLogFormData)
 	require.True(t, ok)
 	assert.Equal(t, "test log", fd.Notes)
 }
@@ -364,10 +364,10 @@ func TestDocumentHandlerStartEditForm(t *testing.T) {
 
 	require.NoError(t, h.StartEditForm(m, id))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formDocument, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, id, *m.editID)
-	fd, ok := m.formData.(*documentFormData)
+	assert.Equal(t, formDocument, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, id, *m.fs.editID)
+	fd, ok := m.fs.formData.(*documentFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Edit Doc", fd.Title)
 }
@@ -387,7 +387,7 @@ func TestProjectHandlerInlineEditTextColumn(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := projectHandler{}
 
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Inline Proj",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusPlanned,
@@ -408,7 +408,7 @@ func TestProjectHandlerInlineEditSelectColumn(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := projectHandler{}
 
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Select Proj",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusPlanned,
@@ -429,7 +429,7 @@ func TestProjectHandlerInlineEditDateColumn(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := projectHandler{}
 
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Date Proj",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusPlanned,
@@ -449,7 +449,7 @@ func TestProjectHandlerInlineEditIDFallsBackToEditForm(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := projectHandler{}
 
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Fallback Proj",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusPlanned,
@@ -463,15 +463,15 @@ func TestProjectHandlerInlineEditIDFallsBackToEditForm(t *testing.T) {
 	// ID column falls back to full edit form.
 	require.NoError(t, h.InlineEdit(m, id, int(projectColID)))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formProject, m.formKind)
-	require.NotNil(t, m.editID)
+	assert.Equal(t, formProject, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
 }
 
 func TestProjectHandlerInlineEditMoneyColumn(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := projectHandler{}
 
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Money Proj",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusPlanned,
@@ -508,7 +508,7 @@ func TestQuoteHandlerInlineEditColumns(t *testing.T) {
 	}))
 	projects, _ := m.store.ListProjects(false)
 
-	m.formData = &quoteFormData{
+	m.fs.formData = &quoteFormData{
 		ProjectID:  projects[0].ID,
 		VendorName: "InlineQuoteCo",
 		Total:      "500.00",
@@ -564,7 +564,7 @@ func TestQuoteHandlerInlineEditColumns(t *testing.T) {
 	m.calendar = nil
 	require.NoError(t, h.InlineEdit(m, id, int(quoteColID)))
 	assert.Equal(t, modeForm, m.mode)
-	require.NotNil(t, m.editID)
+	require.NotNil(t, m.fs.editID)
 }
 
 func TestQuoteHandlerInlineEditNonExistent(t *testing.T) {
@@ -579,7 +579,7 @@ func TestMaintenanceHandlerInlineEditColumns(t *testing.T) {
 	h := maintenanceHandler{}
 	cats, _ := m.store.MaintenanceCategories()
 
-	m.formData = &maintenanceFormData{
+	m.fs.formData = &maintenanceFormData{
 		Name:           "InlineM Item",
 		CategoryID:     cats[0].ID,
 		ScheduleType:   schedInterval,
@@ -629,7 +629,7 @@ func TestMaintenanceHandlerInlineEditColumns(t *testing.T) {
 	m.closeInlineInput()
 	require.NoError(t, h.InlineEdit(m, id, int(maintenanceColID)))
 	assert.Equal(t, modeForm, m.mode)
-	require.NotNil(t, m.editID)
+	require.NotNil(t, m.fs.editID)
 }
 
 // Step 7: Inline edit "Next" column sets due date via calendar, clears interval,
@@ -640,7 +640,7 @@ func TestMaintenanceInlineEditNextSetsDueDateAndSaves(t *testing.T) {
 	// Create a maintenance item with an interval via the form.
 	m.active = tabIndex(tabMaintenance)
 	openAddForm(m)
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Gutter Check"
 	values.ScheduleType = schedInterval
@@ -665,7 +665,7 @@ func TestMaintenanceInlineEditNextSetsDueDateAndSaves(t *testing.T) {
 	require.NotNil(t, m.calendar, "Next column should open a date picker")
 
 	// The form data should have switched to due date mode and cleared interval.
-	fd, ok := m.formData.(*maintenanceFormData)
+	fd, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	assert.Equal(t, schedDueDate, fd.ScheduleType)
 	assert.Empty(t, fd.IntervalMonths, "interval should be cleared when editing due date")
@@ -691,7 +691,7 @@ func TestMaintenanceInlineEditEverySetIntervalAndSaves(t *testing.T) {
 	// Create a maintenance item with a due date via the form.
 	m.active = tabIndex(tabMaintenance)
 	openAddForm(m)
-	values, ok := m.formData.(*maintenanceFormData)
+	values, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	values.Name = "Roof Inspect"
 	values.ScheduleType = schedDueDate
@@ -717,7 +717,7 @@ func TestMaintenanceInlineEditEverySetIntervalAndSaves(t *testing.T) {
 	assert.Equal(t, "Interval", m.inlineInput.Title)
 
 	// The form data should have switched to interval mode and cleared due date.
-	fd, ok := m.formData.(*maintenanceFormData)
+	fd, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	assert.Equal(t, schedInterval, fd.ScheduleType)
 	assert.Empty(t, fd.DueDate, "due date should be cleared when editing interval")
@@ -754,7 +754,7 @@ func TestApplianceHandlerInlineEditColumns(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := applianceHandler{}
 
-	m.formData = &applianceFormData{
+	m.fs.formData = &applianceFormData{
 		Name:  "InlineA Fridge",
 		Brand: "LG",
 		Cost:  "500.00",
@@ -801,7 +801,7 @@ func TestApplianceHandlerInlineEditColumns(t *testing.T) {
 	m.calendar = nil
 	require.NoError(t, h.InlineEdit(m, id, int(applianceColID)))
 	assert.Equal(t, modeForm, m.mode)
-	require.NotNil(t, m.editID)
+	require.NotNil(t, m.fs.editID)
 }
 
 func TestApplianceHandlerInlineEditNonExistent(t *testing.T) {
@@ -815,7 +815,7 @@ func TestIncidentHandlerInlineEditColumns(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := incidentHandler{}
 
-	m.formData = &incidentFormData{
+	m.fs.formData = &incidentFormData{
 		Title:       "Inline Incident",
 		Status:      data.IncidentStatusOpen,
 		Severity:    data.IncidentSeveritySoon,
@@ -891,7 +891,7 @@ func TestIncidentHandlerInlineEditColumns(t *testing.T) {
 	m.closeInlineInput()
 	require.NoError(t, h.InlineEdit(m, id, int(incidentColID)))
 	assert.Equal(t, modeForm, m.mode)
-	require.NotNil(t, m.editID)
+	require.NotNil(t, m.fs.editID)
 }
 
 func TestIncidentHandlerInlineEditNonExistent(t *testing.T) {
@@ -913,7 +913,7 @@ func TestServiceLogHandlerInlineEditColumns(t *testing.T) {
 	maintID := items[0].ID
 
 	h := serviceLogHandler{maintenanceItemID: maintID}
-	m.formData = &serviceLogFormData{
+	m.fs.formData = &serviceLogFormData{
 		MaintenanceItemID: maintID,
 		ServicedAt:        "2026-01-15",
 		Cost:              "50.00",
@@ -950,15 +950,15 @@ func TestServiceLogHandlerInlineEditColumns(t *testing.T) {
 	require.NoError(t, h.InlineEdit(m, id, int(serviceLogColNotes)))
 	assert.Nil(t, m.inlineInput)
 	assert.Equal(t, modeForm, m.mode)
-	assert.True(t, m.notesEditMode)
+	assert.True(t, m.fs.notesEditMode)
 
 	// ID column falls back to edit form.
 	m.exitForm()
 	m.closeInlineInput()
-	m.notesEditMode = false
+	m.fs.notesEditMode = false
 	require.NoError(t, h.InlineEdit(m, id, int(serviceLogColID)))
 	assert.Equal(t, modeForm, m.mode)
-	require.NotNil(t, m.editID)
+	require.NotNil(t, m.fs.editID)
 }
 
 func TestServiceLogHandlerInlineEditNonExistent(t *testing.T) {
@@ -972,7 +972,7 @@ func TestVendorHandlerInlineEditColumns(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := vendorHandler{}
 
-	m.formData = &vendorFormData{
+	m.fs.formData = &vendorFormData{
 		Name:    "InlineV Vendor",
 		Email:   "test@test.com",
 		Phone:   "555-1234",
@@ -1007,7 +1007,7 @@ func TestVendorHandlerInlineEditColumns(t *testing.T) {
 	m.closeInlineInput()
 	require.NoError(t, h.InlineEdit(m, id, int(vendorColID)))
 	assert.Equal(t, modeForm, m.mode)
-	require.NotNil(t, m.editID)
+	require.NotNil(t, m.fs.editID)
 }
 
 func TestVendorHandlerInlineEditNonExistent(t *testing.T) {
@@ -1039,12 +1039,12 @@ func TestDocumentHandlerInlineEditColumns(t *testing.T) {
 	require.NoError(t, h.InlineEdit(m, id, int(documentColNotes)))
 	assert.Nil(t, m.inlineInput)
 	assert.Equal(t, modeForm, m.mode)
-	assert.True(t, m.notesEditMode)
+	assert.True(t, m.fs.notesEditMode)
 
 	// Entity opens form overlay (select).
 	m.exitForm()
 	m.closeInlineInput()
-	m.notesEditMode = false
+	m.fs.notesEditMode = false
 	require.NoError(t, h.InlineEdit(m, id, int(documentColEntity)))
 	assert.Nil(t, m.inlineInput)
 	assert.Equal(t, modeForm, m.mode)
@@ -1054,7 +1054,7 @@ func TestDocumentHandlerInlineEditColumns(t *testing.T) {
 	m.closeInlineInput()
 	require.NoError(t, h.InlineEdit(m, id, int(documentColID)))
 	assert.Equal(t, modeForm, m.mode)
-	require.NotNil(t, m.editID)
+	require.NotNil(t, m.fs.editID)
 }
 
 func TestDocumentHandlerInlineEditNonExistent(t *testing.T) {
@@ -1082,7 +1082,7 @@ func TestEntityDocumentHandlerStartAddForm(t *testing.T) {
 	h := newEntityDocumentHandler(data.DocumentEntityProject, projID)
 	require.NoError(t, h.StartAddForm(m))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formDocument, m.formKind)
+	assert.Equal(t, formDocument, m.fs.formKind)
 }
 
 func TestEntityDocumentHandlerStartEditForm(t *testing.T) {
@@ -1107,9 +1107,9 @@ func TestEntityDocumentHandlerStartEditForm(t *testing.T) {
 	h := newEntityDocumentHandler(data.DocumentEntityProject, projID)
 	require.NoError(t, h.StartEditForm(m, docID))
 	assert.Equal(t, modeForm, m.mode)
-	assert.Equal(t, formDocument, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, docID, *m.editID)
+	assert.Equal(t, formDocument, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, docID, *m.fs.editID)
 }
 
 func TestEntityDocumentHandlerInlineEditSkipsEntityColumn(t *testing.T) {
@@ -1188,7 +1188,7 @@ func TestSkipColEditRemapsIndices(t *testing.T) {
 	projects, _ := m.store.ListProjects(false)
 
 	// Create a quote so we can inline edit it.
-	m.formData = &quoteFormData{
+	m.fs.formData = &quoteFormData{
 		ProjectID:  projects[0].ID,
 		VendorName: "SkipCo",
 		Total:      "300.00",
@@ -1247,7 +1247,7 @@ func TestStartEditIncidentFormPopulatesAllFields(t *testing.T) {
 
 	h := incidentHandler{}
 	require.NoError(t, h.StartEditForm(m, id))
-	fd, ok := m.formData.(*incidentFormData)
+	fd, ok := m.fs.formData.(*incidentFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Full Incident", fd.Title)
 	assert.Equal(t, "test desc", fd.Description)
@@ -1292,7 +1292,7 @@ func TestStartEditServiceLogFormPopulatesAllFields(t *testing.T) {
 
 	h := serviceLogHandler{maintenanceItemID: maintID}
 	require.NoError(t, h.StartEditForm(m, id))
-	fd, ok := m.formData.(*serviceLogFormData)
+	fd, ok := m.fs.formData.(*serviceLogFormData)
 	require.True(t, ok)
 	assert.Equal(t, maintID, fd.MaintenanceItemID)
 	assert.Equal(t, "2026-01-20", fd.ServicedAt)
@@ -1322,7 +1322,7 @@ func TestStartEditApplianceFormPopulatesAllFields(t *testing.T) {
 
 	h := applianceHandler{}
 	require.NoError(t, h.StartEditForm(m, id))
-	fd, ok := m.formData.(*applianceFormData)
+	fd, ok := m.fs.formData.(*applianceFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Full Fridge", fd.Name)
 	assert.Equal(t, "Samsung", fd.Brand)
@@ -1361,7 +1361,7 @@ func TestStartEditMaintenanceFormPopulatesAllFields(t *testing.T) {
 
 	h := maintenanceHandler{}
 	require.NoError(t, h.StartEditForm(m, id))
-	fd, ok := m.formData.(*maintenanceFormData)
+	fd, ok := m.fs.formData.(*maintenanceFormData)
 	require.True(t, ok)
 	assert.Equal(t, "Full Maint", fd.Name)
 	assert.Equal(t, cats[0].ID, fd.CategoryID)

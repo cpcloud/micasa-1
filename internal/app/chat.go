@@ -70,10 +70,14 @@ type modelCompleterEntry struct {
 type modelCompleterMatch struct {
 	Name      string
 	Score     int
+	Index     int // original position for tiebreaking
 	Positions []int
 	Active    bool // true if this is the currently selected model
 	Local     bool // true if already available on the server
 }
+
+func (m modelCompleterMatch) fuzzyScore() int { return m.Score }
+func (m modelCompleterMatch) fuzzyIndex() int { return m.Index }
 
 const modelCommandPrefix = "/model "
 
@@ -229,11 +233,9 @@ func (m *Model) cancelChatOperations() {
 		m.chat.CancelFn = nil
 
 		if m.chat.Visible {
-			// Remove the "generating query" notice and incomplete assistant message.
 			m.removeLastNotice()
-			if len(m.chat.Messages) > 0 &&
-				m.chat.Messages[len(m.chat.Messages)-1].Role == roleAssistant {
-				m.chat.Messages = m.chat.Messages[:len(m.chat.Messages)-1]
+			if msgs := m.chat.Messages; len(msgs) > 0 && msgs[len(msgs)-1].Role == roleAssistant {
+				m.chat.Messages = msgs[:len(msgs)-1]
 			}
 			m.chat.Messages = append(m.chat.Messages, chatMessage{
 				Role: roleNotice, Content: "Interrupted",
@@ -398,7 +400,7 @@ func (m *Model) handleSlashCommand(input string) tea.Cmd {
 		return nil
 	default:
 		m.chat.Messages = append(m.chat.Messages, chatMessage{
-			Role: roleError, Content: "unknown command: " + cmd + " (try /help)",
+			Role: roleError, Content: fmt.Sprintf("unknown command: %s (try /help)", cmd),
 		})
 		m.refreshChatViewport()
 		return nil
@@ -545,7 +547,7 @@ func refilterModelCompleter(mc *modelCompleter, query, current string) {
 		mc.Matches = make([]modelCompleterMatch, len(mc.All))
 		for i, entry := range mc.All {
 			mc.Matches[i] = modelCompleterMatch{
-				Name: entry.Name, Local: entry.Local,
+				Name: entry.Name, Index: i, Local: entry.Local,
 				Active: entry.Name == current,
 			}
 		}
@@ -554,24 +556,15 @@ func refilterModelCompleter(mc *modelCompleter, query, current string) {
 	}
 
 	mc.Matches = mc.Matches[:0]
-	for _, entry := range mc.All {
+	for i, entry := range mc.All {
 		if score, positions := fuzzyMatch(query, entry.Name); score > 0 {
 			mc.Matches = append(mc.Matches, modelCompleterMatch{
-				Name: entry.Name, Score: score, Positions: positions,
+				Name: entry.Name, Score: score, Index: i, Positions: positions,
 				Active: entry.Name == current, Local: entry.Local,
 			})
 		}
 	}
-	// Sort by score descending.
-	for i := 1; i < len(mc.Matches); i++ {
-		key := mc.Matches[i]
-		j := i - 1
-		for j >= 0 && key.Score > mc.Matches[j].Score {
-			mc.Matches[j+1] = mc.Matches[j]
-			j--
-		}
-		mc.Matches[j+1] = key
-	}
+	sortFuzzyScored(mc.Matches)
 	mc.clampCursor()
 }
 
@@ -858,21 +851,27 @@ func (m *Model) removeLastNotice() {
 	}
 }
 
+// replaceAssistantWithError removes the last assistant message (if present),
+// appends an error message, and refreshes the viewport. Used by stream error
+// handlers where the incomplete assistant message should be discarded.
+func (m *Model) replaceAssistantWithError(errMsg string) {
+	msgs := m.chat.Messages
+	if n := len(msgs); n > 0 && msgs[n-1].Role == roleAssistant {
+		m.chat.Messages = msgs[:n-1]
+	}
+	m.chat.Messages = append(m.chat.Messages, chatMessage{
+		Role: roleError, Content: errMsg,
+	})
+	m.refreshChatViewport()
+}
+
 // handleSQLStreamStarted processes the initial SQL stream setup.
 func (m *Model) handleSQLStreamStarted(msg sqlStreamStartedMsg) tea.Cmd {
 	if msg.Err != nil {
 		m.chat.Streaming = false
 		m.chat.StreamingSQL = false
-		m.removeLastNotice() // Remove "generating query"
-		// Remove empty assistant message we added.
-		if len(m.chat.Messages) > 0 &&
-			m.chat.Messages[len(m.chat.Messages)-1].Role == roleAssistant {
-			m.chat.Messages = m.chat.Messages[:len(m.chat.Messages)-1]
-		}
-		m.chat.Messages = append(m.chat.Messages, chatMessage{
-			Role: roleError, Content: msg.Err.Error(),
-		})
-		m.refreshChatViewport()
+		m.removeLastNotice()
+		m.replaceAssistantWithError(msg.Err.Error())
 		return nil
 	}
 
@@ -885,19 +884,9 @@ func (m *Model) handleSQLStreamStarted(msg sqlStreamStartedMsg) tea.Cmd {
 
 // waitForSQLChunk returns a Cmd that reads the next SQL chunk from the stream.
 func waitForSQLChunk(ch <-chan llm.StreamChunk) tea.Cmd {
-	return func() tea.Msg {
-		chunk, ok := <-ch
-		if !ok {
-			// Channel closed (likely due to cancellation or error).
-			// Return nil to stop the message loop without triggering Done handler.
-			return nil
-		}
-		return sqlChunkMsg{
-			Content: chunk.Content,
-			Done:    chunk.Done,
-			Err:     chunk.Err,
-		}
-	}
+	return waitForStream(ch, func(c llm.StreamChunk) tea.Msg {
+		return sqlChunkMsg{Content: c.Content, Done: c.Done, Err: c.Err}
+	}, nil)
 }
 
 // handleSQLChunk processes a single SQL token from the stream.
@@ -912,15 +901,7 @@ func (m *Model) handleSQLChunk(msg sqlChunkMsg) tea.Cmd {
 		m.chat.StreamingSQL = false
 		m.chat.CancelFn = nil
 		m.removeLastNotice()
-		// Remove incomplete assistant message.
-		if len(m.chat.Messages) > 0 &&
-			m.chat.Messages[len(m.chat.Messages)-1].Role == roleAssistant {
-			m.chat.Messages = m.chat.Messages[:len(m.chat.Messages)-1]
-		}
-		m.chat.Messages = append(m.chat.Messages, chatMessage{
-			Role: roleError, Content: msg.Err.Error(),
-		})
-		m.refreshChatViewport()
+		m.replaceAssistantWithError(msg.Err.Error())
 		return nil
 	}
 
@@ -946,15 +927,7 @@ func (m *Model) handleSQLChunk(msg sqlChunkMsg) tea.Cmd {
 
 		if sql == "" {
 			m.chat.Streaming = false
-			// Remove incomplete assistant message.
-			if len(m.chat.Messages) > 0 &&
-				m.chat.Messages[len(m.chat.Messages)-1].Role == roleAssistant {
-				m.chat.Messages = m.chat.Messages[:len(m.chat.Messages)-1]
-			}
-			m.chat.Messages = append(m.chat.Messages, chatMessage{
-				Role: roleError, Content: "LLM returned empty SQL",
-			})
-			m.refreshChatViewport()
+			m.replaceAssistantWithError("LLM returned empty SQL")
 			return nil
 		}
 
@@ -1120,19 +1093,9 @@ func buildTableInfoFrom(store *data.Store) []llm.TableInfo {
 // waitForChunk returns a Cmd that blocks until the next chunk arrives on the
 // channel, then delivers it as a chatChunkMsg.
 func waitForChunk(ch <-chan llm.StreamChunk) tea.Cmd {
-	return func() tea.Msg {
-		chunk, ok := <-ch
-		if !ok {
-			// Channel closed (likely due to cancellation or error).
-			// Return nil to stop the message loop without triggering Done handler.
-			return nil
-		}
-		return chatChunkMsg{
-			Content: chunk.Content,
-			Done:    chunk.Done,
-			Err:     chunk.Err,
-		}
-	}
+	return waitForStream(ch, func(c llm.StreamChunk) tea.Msg {
+		return chatChunkMsg{Content: c.Content, Done: c.Done, Err: c.Err}
+	}, nil)
 }
 
 // refreshChatViewport rebuilds the viewport content from the message history.
@@ -1249,7 +1212,7 @@ func (m *Model) llmModelLabel() string {
 }
 
 // handleChatKey processes keys when the chat overlay is active.
-func (m *Model) handleChatKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleChatKey(key tea.KeyMsg) tea.Cmd {
 	// Completer navigation takes priority over normal input handling.
 	if mc := m.chat.Completer; mc != nil && !mc.Loading {
 		switch key.String() {
@@ -1257,59 +1220,59 @@ func (m *Model) handleChatKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Dismiss completer but keep "/model " in the input so the user
 			// can edit and re-trigger.
 			m.deactivateCompleter()
-			return m, nil
+			return nil
 		case keyUp, keyCtrlP:
 			if mc.Cursor > 0 {
 				mc.Cursor--
 			}
-			return m, nil
+			return nil
 		case keyDown, keyCtrlN:
 			if mc.Cursor < len(mc.Matches)-1 {
 				mc.Cursor++
 			}
-			return m, nil
+			return nil
 		case keyEnter:
 			if len(mc.Matches) > 0 {
 				selected := mc.Matches[mc.Cursor].Name
 				m.deactivateCompleter()
 				m.chat.Input.SetValue("")
-				return m, m.cmdSwitchModel(selected)
+				return m.cmdSwitchModel(selected)
 			}
 			m.deactivateCompleter()
-			return m, nil
+			return nil
 		case keyCtrlQ:
-			return m, tea.Quit
+			return tea.Quit
 		}
 	}
 
 	switch key.String() {
 	case keyEsc:
 		m.hideChat()
-		return m, nil
+		return nil
 	case keyEnter:
 		if m.chat.Streaming {
-			return m, nil
+			return nil
 		}
-		return m, m.submitChat()
+		return m.submitChat()
 	case keyCtrlS:
 		m.toggleSQL()
-		return m, nil
+		return nil
 	case keyCtrlO:
 		m.toggleMagMode()
-		return m, nil
+		return nil
 	case keyCtrlC:
 		// Handled by the global ctrl+c handler in model.Update which calls
 		// cancelChatOperations. This case is unreachable but kept for clarity.
-		return m, nil
+		return nil
 	case keyUp, keyCtrlP:
 		if m.chat.Input.Focused() && !m.chat.Streaming {
 			m.historyBack()
-			return m, nil
+			return nil
 		}
 	case keyDown, keyCtrlN:
 		if m.chat.Input.Focused() && !m.chat.Streaming {
 			m.historyForward()
-			return m, nil
+			return nil
 		}
 	}
 
@@ -1318,12 +1281,12 @@ func (m *Model) handleChatKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.chat.Input.Focused() {
 		var cmd tea.Cmd
 		m.chat.Input, cmd = m.chat.Input.Update(key)
-		return m, m.syncCompleter(cmd)
+		return m.syncCompleter(cmd)
 	}
 
 	var cmd tea.Cmd
 	m.chat.Viewport, cmd = m.chat.Viewport.Update(key)
-	return m, cmd
+	return cmd
 }
 
 // syncCompleter checks the current input value and activates/deactivates
@@ -1501,7 +1464,6 @@ func (m *Model) renderModelCompleterFor(mc *modelCompleter, query string, innerW
 //
 // Fuzzy-matched characters get the accent highlight regardless.
 func (m *Model) highlightModelMatch(match modelCompleterMatch) string {
-	// Determine base and highlight styles from model state.
 	var baseStyle, highlightStyle lipgloss.Style
 	switch {
 	case match.Active:
@@ -1514,44 +1476,7 @@ func (m *Model) highlightModelMatch(match modelCompleterMatch) string {
 		baseStyle = m.styles.ModelRemote()
 		highlightStyle = m.styles.ModelRemoteHL()
 	}
-
-	if len(match.Positions) == 0 {
-		return baseStyle.Render(match.Name)
-	}
-
-	posSet := make(map[int]bool, len(match.Positions))
-	for _, p := range match.Positions {
-		posSet[p] = true
-	}
-
-	runes := []rune(match.Name)
-	var b strings.Builder
-	inMatch := false
-	var run []rune
-
-	flush := func() {
-		if len(run) == 0 {
-			return
-		}
-		if inMatch {
-			b.WriteString(highlightStyle.Render(string(run)))
-		} else {
-			b.WriteString(baseStyle.Render(string(run)))
-		}
-		run = run[:0]
-	}
-
-	for i, r := range runes {
-		matched := posSet[i]
-		if matched != inMatch {
-			flush()
-			inMatch = matched
-		}
-		run = append(run, r)
-	}
-	flush()
-
-	return b.String()
+	return highlightFuzzyPositions(match.Name, match.Positions, baseStyle, highlightStyle)
 }
 
 // --- Layout helpers ---

@@ -307,7 +307,7 @@ func TestFormDirtyDetectionUserFlow(t *testing.T) {
 		Brand: "Samsung",
 		Cost:  "$899.00",
 	}
-	m.formData = values
+	m.fs.formData = values
 	m.snapshotForm()
 
 	// User hasn't changed anything yet — status should show "saved".
@@ -341,7 +341,7 @@ func TestOversizedDocumentShowsHumanReadableSize(t *testing.T) {
 	require.NoError(t, os.WriteFile(bigFile, make([]byte, 2048), 0o600))
 
 	// Simulate the user filling out the document form with the oversized file.
-	m.formData = &documentFormData{
+	m.fs.formData = &documentFormData{
 		Title:    "Too Big",
 		FilePath: bigFile,
 	}

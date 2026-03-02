@@ -171,7 +171,7 @@ func TestJumpSelectToOrdinal(t *testing.T) {
 		form := huh.NewForm(huh.NewGroup(sel))
 		form.Init()
 
-		m := &Model{form: form}
+		m := &Model{fs: formState{form: form}}
 		m.jumpSelectToOrdinal(2) // should jump to "Beta"
 
 		assert.Equal(t, "b", val)
@@ -190,7 +190,7 @@ func TestJumpSelectToOrdinal(t *testing.T) {
 		form := huh.NewForm(huh.NewGroup(sel))
 		form.Init()
 
-		m := &Model{form: form}
+		m := &Model{fs: formState{form: form}}
 		m.jumpSelectToOrdinal(1)
 
 		assert.Equal(t, "a", val)
@@ -208,7 +208,7 @@ func TestJumpSelectToOrdinal(t *testing.T) {
 		form := huh.NewForm(huh.NewGroup(sel))
 		form.Init()
 
-		m := &Model{form: form}
+		m := &Model{fs: formState{form: form}}
 		m.jumpSelectToOrdinal(5) // exceeds 2 options
 
 		assert.Equal(t, "a", val, "value should be unchanged when ordinal exceeds count")
@@ -227,7 +227,7 @@ func TestJumpSelectToOrdinal(t *testing.T) {
 		form := huh.NewForm(huh.NewGroup(sel))
 		form.Init()
 
-		m := &Model{form: form}
+		m := &Model{fs: formState{form: form}}
 		m.jumpSelectToOrdinal(3)
 
 		require.Equal(t, uint(30), val)

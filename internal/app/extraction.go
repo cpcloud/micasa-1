@@ -204,7 +204,7 @@ func (m *Model) startExtractionOverlay(
 	mime string,
 	extractedText string,
 ) tea.Cmd {
-	needsExtract := extract.NeedsOCR(m.extractors, mime)
+	needsExtract := extract.NeedsOCR(m.ex.extractors, mime)
 	needsLLM := m.extractionLLMClient() != nil
 
 	if !needsExtract && !needsLLM {
@@ -252,7 +252,7 @@ func (m *Model) startExtractionOverlay(
 		extractedText: extractedText,
 		fileData:      fileData,
 		mime:          mime,
-		extractors:    m.extractors,
+		extractors:    m.ex.extractors,
 		hasText:       hasText,
 		hasExtract:    needsExtract,
 		hasLLM:        needsLLM,
@@ -281,10 +281,10 @@ func (m *Model) startExtractionOverlay(
 	}
 
 	// Background any existing foreground extraction instead of cancelling.
-	if m.extraction != nil {
+	if m.ex.extraction != nil {
 		m.backgroundExtraction()
 	}
-	m.extraction = state
+	m.ex.extraction = state
 
 	var cmd tea.Cmd
 	if needsExtract {
@@ -304,10 +304,10 @@ func (m *Model) startExtractionOverlay(
 // findExtraction returns the extraction with the given ID, checking the
 // foreground extraction first, then scanning bgExtractions.
 func (m *Model) findExtraction(id uint64) *extractionLogState {
-	if m.extraction != nil && m.extraction.ID == id {
-		return m.extraction
+	if m.ex.extraction != nil && m.ex.extraction.ID == id {
+		return m.ex.extraction
 	}
-	for _, ex := range m.bgExtractions {
+	for _, ex := range m.ex.bgExtractions {
 		if ex.ID == id {
 			return ex
 		}
@@ -317,7 +317,7 @@ func (m *Model) findExtraction(id uint64) *extractionLogState {
 
 // isBgExtraction returns true when the given extraction is in bgExtractions.
 func (m *Model) isBgExtraction(ex *extractionLogState) bool {
-	for _, bg := range m.bgExtractions {
+	for _, bg := range m.ex.bgExtractions {
 		if bg == ex {
 			return true
 		}
@@ -327,50 +327,50 @@ func (m *Model) isBgExtraction(ex *extractionLogState) bool {
 
 // cancelExtraction cancels any in-flight extraction and clears state.
 func (m *Model) cancelExtraction() {
-	if m.extraction == nil {
+	if m.ex.extraction == nil {
 		return
 	}
-	if m.extraction.CancelFn != nil {
-		m.extraction.CancelFn()
+	if m.ex.extraction.CancelFn != nil {
+		m.ex.extraction.CancelFn()
 	}
-	m.extraction = nil
+	m.ex.extraction = nil
 }
 
 // cancelAllExtractions cancels the foreground and all background extractions.
 func (m *Model) cancelAllExtractions() {
 	m.cancelExtraction()
-	for _, ex := range m.bgExtractions {
+	for _, ex := range m.ex.bgExtractions {
 		if ex.CancelFn != nil {
 			ex.CancelFn()
 		}
 	}
-	m.bgExtractions = nil
+	m.ex.bgExtractions = nil
 }
 
 // backgroundExtraction moves the foreground extraction to bgExtractions.
 func (m *Model) backgroundExtraction() {
-	if m.extraction == nil {
+	if m.ex.extraction == nil {
 		return
 	}
-	m.extraction.Visible = false
-	m.bgExtractions = append(m.bgExtractions, m.extraction)
-	m.extraction = nil
+	m.ex.extraction.Visible = false
+	m.ex.bgExtractions = append(m.ex.bgExtractions, m.ex.extraction)
+	m.ex.extraction = nil
 }
 
 // foregroundExtraction brings the most recent bg extraction to the foreground.
 func (m *Model) foregroundExtraction() {
-	n := len(m.bgExtractions)
+	n := len(m.ex.bgExtractions)
 	if n == 0 {
 		return
 	}
 	// If there's already a foreground extraction, background it first.
-	if m.extraction != nil {
+	if m.ex.extraction != nil {
 		m.backgroundExtraction()
 	}
-	ex := m.bgExtractions[n-1]
-	m.bgExtractions = m.bgExtractions[:n-1]
+	ex := m.ex.bgExtractions[n-1]
+	m.ex.bgExtractions = m.ex.bgExtractions[:n-1]
 	ex.Visible = true
-	m.extraction = ex
+	m.ex.extraction = ex
 }
 
 // --- Async commands ---
@@ -387,16 +387,9 @@ func asyncExtractCmd(ctx context.Context, state *extractionLogState) tea.Cmd {
 
 // waitForExtractProgress blocks until the next extraction progress update.
 func waitForExtractProgress(id uint64, ch <-chan extract.ExtractProgress) tea.Cmd {
-	return func() tea.Msg {
-		p, ok := <-ch
-		if !ok {
-			return extractionProgressMsg{
-				ID:       id,
-				Progress: extract.ExtractProgress{Done: true},
-			}
-		}
+	return waitForStream(ch, func(p extract.ExtractProgress) tea.Msg {
 		return extractionProgressMsg{ID: id, Progress: p}
-	}
+	}, extractionProgressMsg{ID: id, Progress: extract.ExtractProgress{Done: true}})
 }
 
 // llmExtractCmd starts LLM document analysis with streaming.
@@ -461,18 +454,9 @@ func toExtractRows(rows []data.EntityRow) []extract.EntityRow {
 
 // waitForLLMChunk blocks until the next LLM token.
 func waitForLLMChunk(id uint64, ch <-chan llm.StreamChunk) tea.Cmd {
-	return func() tea.Msg {
-		chunk, ok := <-ch
-		if !ok {
-			return extractionLLMChunkMsg{ID: id, Done: true}
-		}
-		return extractionLLMChunkMsg{
-			ID:      id,
-			Content: chunk.Content,
-			Done:    chunk.Done,
-			Err:     chunk.Err,
-		}
-	}
+	return waitForStream(ch, func(c llm.StreamChunk) tea.Msg {
+		return extractionLLMChunkMsg{ID: id, Content: c.Content, Done: c.Done, Err: c.Err}
+	}, extractionLLMChunkMsg{ID: id, Done: true})
 }
 
 // --- Message handlers ---
@@ -856,7 +840,7 @@ func parseInt64FromData(v any) int64 {
 
 // acceptExtraction persists all pending results and closes the overlay.
 func (m *Model) acceptExtraction() {
-	ex := m.extraction
+	ex := m.ex.extraction
 	if ex == nil || !ex.Done || ex.accepted {
 		return
 	}
@@ -876,13 +860,13 @@ func (m *Model) acceptExtraction() {
 	}
 
 	ex.accepted = true
-	m.extraction = nil
+	m.ex.extraction = nil
 }
 
 // acceptDeferredExtraction creates the deferred document, applying any
 // LLM-produced document fields, then dispatches remaining operations.
 func (m *Model) acceptDeferredExtraction() error {
-	ex := m.extraction
+	ex := m.ex.extraction
 	doc := ex.pendingDoc
 
 	// Apply fields from "create documents" operations to the pending doc.
@@ -931,7 +915,7 @@ func (m *Model) acceptDeferredExtraction() error {
 // acceptExistingExtraction persists extraction text and dispatches operations
 // for an already-saved document.
 func (m *Model) acceptExistingExtraction() error {
-	ex := m.extraction
+	ex := m.ex.extraction
 
 	// Persist async extraction results.
 	if ex.pendingText != "" || len(ex.pendingData) > 0 {
@@ -955,7 +939,7 @@ func (m *Model) acceptExistingExtraction() error {
 
 // rerunLLMExtraction resets the LLM step and re-runs it.
 func (m *Model) rerunLLMExtraction() tea.Cmd {
-	ex := m.extraction
+	ex := m.ex.extraction
 	if ex == nil || !ex.hasLLM {
 		return nil
 	}
@@ -1000,7 +984,7 @@ func (m *Model) rerunLLMExtraction() tea.Cmd {
 
 // handleExtractionKey processes keys when the extraction overlay is visible.
 func (m *Model) handleExtractionKey(msg tea.KeyMsg) tea.Cmd {
-	ex := m.extraction
+	ex := m.ex.extraction
 	if ex.modelPicker != nil && !ex.modelPicker.Loading {
 		return m.handleExtractionModelPickerKey(msg)
 	}
@@ -1012,7 +996,7 @@ func (m *Model) handleExtractionKey(msg tea.KeyMsg) tea.Cmd {
 
 // handleExtractionPipelineKey handles keys in pipeline navigation mode.
 func (m *Model) handleExtractionPipelineKey(msg tea.KeyMsg) tea.Cmd {
-	ex := m.extraction
+	ex := m.ex.extraction
 	switch msg.String() {
 	case keyEsc:
 		m.cancelExtraction()
@@ -1082,7 +1066,7 @@ func (m *Model) handleExtractionPipelineKey(msg tea.KeyMsg) tea.Cmd {
 // activateExtractionModelPicker opens the inline model picker in the
 // extraction overlay, fetching the list of available models.
 func (m *Model) activateExtractionModelPicker() tea.Cmd {
-	ex := m.extraction
+	ex := m.ex.extraction
 	if ex.modelPicker != nil {
 		return nil
 	}
@@ -1108,7 +1092,7 @@ func (m *Model) activateExtractionModelPicker() tea.Cmd {
 // handleExtractionModelPickerKey handles keys when the extraction model
 // picker is showing.
 func (m *Model) handleExtractionModelPickerKey(msg tea.KeyMsg) tea.Cmd {
-	ex := m.extraction
+	ex := m.ex.extraction
 	mc := ex.modelPicker
 	switch msg.String() {
 	case keyEsc:
@@ -1150,11 +1134,11 @@ func (m *Model) handleExtractionModelPickerKey(msg tea.KeyMsg) tea.Cmd {
 // switchExtractionModel sets the extraction model and either reruns
 // immediately (if local) or initiates a pull first.
 func (m *Model) switchExtractionModel(name string, isLocal bool) tea.Cmd {
-	m.extractionModel = name
-	m.extractionClient = nil
+	m.ex.extractionModel = name
+	m.ex.extractionClient = nil
 
 	if isLocal {
-		m.extractionReady = true
+		m.ex.extractionReady = true
 		return m.rerunLLMExtraction()
 	}
 
@@ -1190,7 +1174,7 @@ func (m *Model) switchExtractionModel(name string, isLocal bool) tea.Cmd {
 
 // handleExtractionExploreKey handles keys in table explore mode.
 func (m *Model) handleExtractionExploreKey(msg tea.KeyMsg) tea.Cmd {
-	ex := m.extraction
+	ex := m.ex.extraction
 	switch msg.String() {
 	case keyEsc:
 		ex.exploring = false
@@ -1283,7 +1267,7 @@ func (ex *extractionLogState) activePreviewGroup() *previewTableGroup {
 
 // buildExtractionOverlay renders the extraction progress overlay.
 func (m *Model) buildExtractionOverlay() string {
-	ex := m.extraction
+	ex := m.ex.extraction
 	if ex == nil {
 		return ""
 	}
@@ -1324,7 +1308,7 @@ func previewNaturalWidth(groups []previewTableGroup, sepW int, currencySymbol st
 func (m *Model) buildExtractionPipelineOverlay(
 	contentW, innerW int, titleLine string,
 ) string {
-	ex := m.extraction
+	ex := m.ex.extraction
 	ruleStyle := appStyles.Rule()
 
 	// Compute column widths across all active steps for alignment.
@@ -1507,7 +1491,7 @@ func (m *Model) buildExtractionPipelineOverlay(
 // When interactive is true, the row/col cursors are shown and the section
 // renders at full brightness. When false, the entire section is dimmed.
 func (m *Model) renderOperationPreviewSection(innerW int, interactive bool) string {
-	ex := m.extraction
+	ex := m.ex.extraction
 	if len(ex.previewGroups) == 0 {
 		ex.previewGroups = groupOperationsByTable(ex.operations, m.cur)
 	}
@@ -1565,7 +1549,7 @@ func (m *Model) renderOperationPreviewSection(innerW int, interactive bool) stri
 func (m *Model) renderPreviewTable(
 	g previewTableGroup, innerW, sepW int, sep, divSep string, interactive bool,
 ) string {
-	ex := m.extraction
+	ex := m.ex.extraction
 	seps := make([]string, max(len(g.specs)-1, 0))
 	divSeps := make([]string, len(seps))
 	for i := range seps {
@@ -1622,7 +1606,7 @@ func (m *Model) renderExtractionStep(
 	cols extractionColWidths,
 ) string {
 	name := stepName(si)
-	ex := m.extraction
+	ex := m.ex.extraction
 	hint := m.styles.HeaderHint()
 
 	var icon string
@@ -1710,7 +1694,7 @@ func (m *Model) renderExtractionStep(
 		if err := json.Indent(&buf, []byte(extract.StripCodeFences(raw)), "", "  "); err == nil {
 			formatted = buf.String()
 		}
-		md := "```json\n" + formatted + "\n```"
+		md := fmt.Sprintf("```json\n%s\n```", formatted)
 		rendered = strings.TrimSpace(ex.renderMarkdown(md, logW))
 	} else {
 		rendered = m.styles.HeaderHint().Render(wordWrap(raw, logW))
@@ -1743,8 +1727,8 @@ func stepName(si extractionStep) string {
 
 // extractionModelLabel returns the model name used for extraction.
 func (m *Model) extractionModelLabel() string {
-	if m.extractionModel != "" {
-		return m.extractionModel
+	if m.ex.extractionModel != "" {
+		return m.ex.extractionModel
 	}
 	return m.llmModelLabel()
 }
@@ -1975,7 +1959,7 @@ func (m *Model) extractionOverlayWidth() int {
 	w := 80
 
 	// Widen to fit the widest preview table if operations are available.
-	ex := m.extraction
+	ex := m.ex.extraction
 	if ex != nil && len(ex.operations) > 0 {
 		if len(ex.previewGroups) == 0 {
 			ex.previewGroups = groupOperationsByTable(ex.operations, m.cur)

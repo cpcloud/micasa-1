@@ -19,7 +19,7 @@ func (m *Model) buildView() string {
 		return m.buildTerminalTooSmallView()
 	}
 
-	if m.mode == modeForm && m.form != nil && m.formKind == formHouse {
+	if m.mode == modeForm && m.fs.form != nil && m.fs.formKind == formHouse {
 		return m.formFullScreen()
 	}
 
@@ -34,7 +34,7 @@ func (m *Model) buildView() string {
 		{m.calendar != nil, m.buildCalendarOverlay},
 		{m.notePreview != nil, m.buildNotePreviewOverlay},
 		{m.columnFinder != nil, m.buildColumnFinderOverlay},
-		{m.extraction != nil && m.extraction.Visible, m.buildExtractionOverlay},
+		{m.ex.extraction != nil && m.ex.extraction.Visible, m.buildExtractionOverlay},
 		{m.chat != nil && m.chat.Visible, m.buildChatOverlay},
 		{m.helpViewport != nil, m.buildHelpOverlay},
 	}
@@ -108,11 +108,11 @@ func (m *Model) buildBaseView() string {
 	tabLine := m.tabUnderline()
 
 	var content string
-	if m.mode == modeForm && m.form != nil {
+	if m.mode == modeForm && m.fs.form != nil {
 		if legend := m.requiredLegend(); legend != "" {
-			content = legend + "\n\n" + m.form.View()
+			content = legend + "\n\n" + m.fs.form.View()
 		} else {
-			content = m.form.View()
+			content = m.fs.form.View()
 		}
 	} else if tab := m.effectiveTab(); tab != nil {
 		content = m.tableView(tab)
@@ -175,10 +175,7 @@ func (m *Model) buildDashboardOverlay() string {
 	// Budget for dashboardView content: outer box height minus chrome.
 	// Chrome: border (2) + padding (2) + header (1) + rule (1) + blank (1)
 	// + hints (1) = 8 lines.
-	maxH := m.effectiveHeight() - 4
-	if maxH < 10 {
-		maxH = 10
-	}
+	maxH := m.overlayMaxHeight()
 	contentBudget := maxH - 8
 	if contentBudget < 3 {
 		contentBudget = 3
@@ -274,7 +271,7 @@ func (m *Model) statusView() string {
 		return m.withPullProgress(m.inlineInputStatusView())
 	}
 	if m.mode == modeForm {
-		if m.confirmDiscard {
+		if m.fs.confirmDiscard {
 			prompt := m.styles.FormDirty().Render("Discard unsaved changes?")
 			hints := joinWithSeparator(
 				m.helpSeparator(),
@@ -284,14 +281,14 @@ func (m *Model) statusView() string {
 			return m.withPullProgress(prompt + "  " + hints)
 		}
 		dirtyIndicator := m.styles.FormClean().Render("○ saved")
-		if m.formDirty {
+		if m.fs.formDirty {
 			dirtyIndicator = m.styles.FormDirty().Render("● unsaved")
 		}
 		parts := []string{
 			dirtyIndicator,
 			m.helpItem(keyCtrlS, "save"),
 		}
-		if m.notesEditMode {
+		if m.fs.notesEditMode {
 			parts = append(parts, m.helpItem(keyCtrlE, "editor"))
 		}
 		parts = append(parts,
@@ -340,12 +337,12 @@ func (m *Model) statusView() string {
 // withBgExtractionIndicator prepends a background extraction indicator when
 // extractions are running or awaiting review in the background.
 func (m *Model) withBgExtractionIndicator(statusOutput string) string {
-	n := len(m.bgExtractions)
+	n := len(m.ex.bgExtractions)
 	if n == 0 {
 		return statusOutput
 	}
 	var running, ready int
-	for _, bg := range m.bgExtractions {
+	for _, bg := range m.ex.bgExtractions {
 		if bg.Done {
 			ready++
 		} else {
@@ -354,7 +351,7 @@ func (m *Model) withBgExtractionIndicator(statusOutput string) string {
 	}
 	var parts []string
 	if running > 0 {
-		sp := m.bgExtractions[0].Spinner.View()
+		sp := m.ex.bgExtractions[0].Spinner.View()
 		parts = append(parts, appStyles.AccentText().Render(
 			fmt.Sprintf("%s %d extracting", sp, running),
 		))
@@ -650,7 +647,7 @@ func (m *Model) drilldownHint(_ *Tab, _ columnSpec) string {
 }
 
 func (m *Model) formFullScreen() string {
-	formContent := m.form.View()
+	formContent := m.fs.form.View()
 	if legend := m.requiredLegend(); legend != "" {
 		formContent = legend + "\n\n" + formContent
 	}
@@ -686,14 +683,9 @@ func (m *Model) buildNotePreviewOverlay() string {
 
 	b.WriteString(m.styles.HeaderHint().Render("Press any key to close"))
 
-	maxH := m.effectiveHeight() - 4
-	if maxH < 10 {
-		maxH = 10
-	}
-
 	return m.styles.OverlayBox().
 		Width(contentW).
-		MaxHeight(maxH).
+		MaxHeight(m.overlayMaxHeight()).
 		Render(b.String())
 }
 
@@ -1193,24 +1185,19 @@ func (m *Model) emptyHint(tab *Tab) string {
 }
 
 // topLevelEmptyHint returns the empty-state message for a top-level tab.
+var emptyHintOverrides = map[TabKind]string{
+	tabQuotes:    "No quotes yet. Create a project first, then drill in and add a quote.",
+	tabDocuments: "No documents yet.",
+}
+
 func topLevelEmptyHint(kind TabKind) string {
-	switch kind {
-	case tabProjects:
-		return "No projects yet. Press i for edit mode, then a to add one. ? for help."
-	case tabQuotes:
-		return "No quotes yet. Create a project first, then drill in and add a quote."
-	case tabMaintenance:
-		return "No maintenance items yet. Press i for edit mode, then a to add one. ? for help."
-	case tabIncidents:
-		return "No incidents yet. Press i for edit mode, then a to add one. ? for help."
-	case tabAppliances:
-		return "No appliances yet. Press i for edit mode, then a to add one. ? for help."
-	case tabVendors:
-		return "No vendors yet. Press i for edit mode, then a to add one. ? for help."
-	case tabDocuments:
-		return "No documents yet."
+	if hint, ok := emptyHintOverrides[kind]; ok {
+		return hint
 	}
-	panic(fmt.Sprintf("unhandled TabKind: %d", kind))
+	return fmt.Sprintf(
+		"No %s yet. Press i for edit mode, then a to add one. ? for help.",
+		kind.plural(),
+	)
 }
 
 // markdownRenderer caches a glamour terminal renderer keyed by width.

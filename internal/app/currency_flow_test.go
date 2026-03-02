@@ -137,7 +137,7 @@ func TestCurrencyFlow_QuoteRoundTrip(t *testing.T) {
 			m.active = tabIndex(tabQuotes)
 			openAddForm(m)
 
-			values, ok := m.formData.(*quoteFormData)
+			values, ok := m.fs.formData.(*quoteFormData)
 			require.True(t, ok)
 			values.VendorName = "TestCo"
 			values.Total = tt.input
@@ -666,7 +666,7 @@ func TestCurrencyFlow_EndToEnd_QuoteEditCycle(t *testing.T) {
 			m.active = tabIndex(tabQuotes)
 			openAddForm(m)
 
-			createValues, ok := m.formData.(*quoteFormData)
+			createValues, ok := m.fs.formData.(*quoteFormData)
 			require.True(t, ok, "expected quoteFormData")
 			createValues.VendorName = "TestCo"
 			createValues.Total = cur.FormatCents(150000)
@@ -691,7 +691,7 @@ func TestCurrencyFlow_EndToEnd_QuoteEditCycle(t *testing.T) {
 			require.Equal(t, modeForm, m.mode, "should open full edit form")
 
 			// Verify form pre-population uses correct currency format.
-			editValues, ok := m.formData.(*quoteFormData)
+			editValues, ok := m.fs.formData.(*quoteFormData)
 			require.True(t, ok, "expected quoteFormData for edit")
 			assert.Equal(t, cur.FormatCents(150000), editValues.Total)
 
@@ -796,7 +796,7 @@ func TestCurrencyFlow_FrenchLocale_FormAndView(t *testing.T) {
 	m.active = tabIndex(tabProjects)
 	openAddForm(m)
 
-	pf, ok := m.formData.(*projectFormData)
+	pf, ok := m.fs.formData.(*projectFormData)
 	require.True(t, ok)
 	pf.Title = "Terrasse"
 	pf.ProjectTypeID = types[0].ID
@@ -856,7 +856,7 @@ func TestCurrencyFlow_GermanLocale_FormAndView(t *testing.T) {
 	m.active = tabIndex(tabQuotes)
 	openAddForm(m)
 
-	qf, ok := m.formData.(*quoteFormData)
+	qf, ok := m.fs.formData.(*quoteFormData)
 	require.True(t, ok)
 	qf.VendorName = "DachCo"
 	qf.Total = "3.500,00" // German: period grouping, comma decimal
@@ -980,7 +980,7 @@ func TestCurrencyFlow_EnvCurrency_FirstRun(t *testing.T) {
 	}))
 
 	openAddForm(m)
-	qf, ok := m.formData.(*quoteFormData)
+	qf, ok := m.fs.formData.(*quoteFormData)
 	require.True(t, ok)
 	qf.VendorName = "GardenCo"
 	qf.Total = "500.00"

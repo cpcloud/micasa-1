@@ -76,7 +76,7 @@ func TestHouseFormMetricSavesAsSqFt(t *testing.T) {
 	// Open house form.
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 
 	// User enters 100 m^2.
@@ -111,7 +111,7 @@ func TestHouseFormShowsConvertedValues(t *testing.T) {
 	// Open house form.
 	openHouseForm(m)
 
-	values, ok := m.formData.(*houseFormData)
+	values, ok := m.fs.formData.(*houseFormData)
 	require.True(t, ok)
 
 	// The form should show the value converted to m^2.

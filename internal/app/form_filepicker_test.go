@@ -32,7 +32,7 @@ func sendBackKey(m *Model, key string) {
 // returns it.
 func requireFilePicker(t *testing.T, m *Model) *huh.FilePicker {
 	t.Helper()
-	field := m.form.GetFocusedField()
+	field := m.fs.form.GetFocusedField()
 	require.NotNil(t, field, "form should have a focused field")
 	fp, ok := field.(*huh.FilePicker)
 	require.True(t, ok, "focused field should be a FilePicker")

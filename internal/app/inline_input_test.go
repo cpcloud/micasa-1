@@ -21,9 +21,9 @@ func TestOpenInlineInputSetsState(t *testing.T) {
 	require.NotNil(t, m.inlineInput)
 	assert.Equal(t, "Name", m.inlineInput.Title)
 	assert.Equal(t, uint(42), m.inlineInput.EditID)
-	assert.Equal(t, formVendor, m.formKind)
-	require.NotNil(t, m.editID)
-	assert.Equal(t, uint(42), *m.editID)
+	assert.Equal(t, formVendor, m.fs.formKind)
+	require.NotNil(t, m.fs.editID)
+	assert.Equal(t, uint(42), *m.fs.editID)
 	// The inline input prompt should be visible in the status bar.
 	status := m.statusView()
 	assert.Contains(t, status, "Name:")
@@ -37,8 +37,8 @@ func TestInlineInputEscCloses(t *testing.T) {
 	sendKey(m, "esc")
 
 	assert.Nil(t, m.inlineInput)
-	assert.Equal(t, formNone, m.formKind)
-	assert.Nil(t, m.editID)
+	assert.Equal(t, formNone, m.fs.formKind)
+	assert.Nil(t, m.fs.editID)
 	// After esc, the inline input prompt should be gone and normal hints visible.
 	status := m.statusView()
 	assert.NotContains(t, status, "Name:")

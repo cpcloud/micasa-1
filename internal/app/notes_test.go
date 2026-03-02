@@ -282,10 +282,10 @@ func TestOpenNotesEditOpensTextareaOverlay(t *testing.T) {
 	m.openNotesEdit(1, formServiceLog, &values.Notes, values)
 
 	assert.Equal(t, modeForm, m.mode)
-	assert.True(t, m.notesEditMode)
-	require.NotNil(t, m.notesFieldPtr)
-	assert.Equal(t, &values.Notes, m.notesFieldPtr)
-	assert.NotNil(t, m.form)
+	assert.True(t, m.fs.notesEditMode)
+	require.NotNil(t, m.fs.notesFieldPtr)
+	assert.Equal(t, &values.Notes, m.fs.notesFieldPtr)
+	assert.NotNil(t, m.fs.form)
 	assert.Nil(t, m.inlineInput, "should not use inline input")
 }
 
@@ -302,12 +302,12 @@ func TestNotesEditModeClearedOnExitForm(t *testing.T) {
 	m := newTestModel()
 	values := &serviceLogFormData{Notes: "test"}
 	m.openNotesEdit(1, formServiceLog, &values.Notes, values)
-	require.True(t, m.notesEditMode)
+	require.True(t, m.fs.notesEditMode)
 
 	m.exitForm()
 
-	assert.False(t, m.notesEditMode)
-	assert.Nil(t, m.notesFieldPtr)
+	assert.False(t, m.fs.notesEditMode)
+	assert.Nil(t, m.fs.notesFieldPtr)
 }
 
 func TestCtrlEWithoutEditorShowsError(t *testing.T) {
@@ -333,7 +333,7 @@ func TestEditorFinishedMsgUpdatesFieldAndReopensTextarea(t *testing.T) {
 	tmpFile := t.TempDir() + "/notes.txt"
 	require.NoError(t, os.WriteFile(tmpFile, []byte("edited content\n"), 0o600))
 
-	m.pendingEditor = &editorState{
+	m.fs.pendingEditor = &editorState{
 		EditID:   42,
 		FormKind: formServiceLog,
 		FormData: values,
@@ -347,8 +347,8 @@ func TestEditorFinishedMsgUpdatesFieldAndReopensTextarea(t *testing.T) {
 	assert.Equal(t, "edited content", values.Notes)
 	// Textarea should be reopened.
 	assert.Equal(t, modeForm, m.mode)
-	assert.True(t, m.notesEditMode)
-	assert.NotNil(t, m.form)
+	assert.True(t, m.fs.notesEditMode)
+	assert.NotNil(t, m.fs.form)
 }
 
 func TestEditorFinishedMsgStripsTrailingNewlines(t *testing.T) {
@@ -358,7 +358,7 @@ func TestEditorFinishedMsgStripsTrailingNewlines(t *testing.T) {
 	tmpFile := t.TempDir() + "/notes.txt"
 	require.NoError(t, os.WriteFile(tmpFile, []byte("line one\nline two\n\n\n"), 0o600))
 
-	m.pendingEditor = &editorState{
+	m.fs.pendingEditor = &editorState{
 		FormKind: formServiceLog,
 		FormData: values,
 		FieldPtr: &values.Notes,
@@ -377,7 +377,7 @@ func TestEditorFinishedWithErrorReopensTextarea(t *testing.T) {
 	tmpFile := t.TempDir() + "/notes.txt"
 	require.NoError(t, os.WriteFile(tmpFile, []byte("original"), 0o600))
 
-	m.pendingEditor = &editorState{
+	m.fs.pendingEditor = &editorState{
 		FormKind: formServiceLog,
 		FormData: values,
 		FieldPtr: &values.Notes,
@@ -390,7 +390,7 @@ func TestEditorFinishedWithErrorReopensTextarea(t *testing.T) {
 	assert.Equal(t, "original", values.Notes)
 	// Textarea should still be reopened for retry.
 	assert.Equal(t, modeForm, m.mode)
-	assert.True(t, m.notesEditMode)
+	assert.True(t, m.fs.notesEditMode)
 	assert.Equal(t, statusError, m.status.Kind)
 }
 

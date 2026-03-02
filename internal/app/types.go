@@ -9,7 +9,10 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/cpcloud/micasa/internal/extract"
+	"github.com/cpcloud/micasa/internal/llm"
 )
 
 type Mode int
@@ -34,6 +37,34 @@ const (
 	formVendor
 	formDocument
 )
+
+type formState struct {
+	formKind        FormKind
+	form            *huh.Form
+	formData        any
+	formSnapshot    any
+	formDirty       bool
+	confirmDiscard  bool
+	confirmQuit     bool
+	formHasRequired bool
+	pendingFormInit tea.Cmd
+	editID          *uint
+	notesEditMode   bool
+	notesFieldPtr   *string
+	pendingEditor   *editorState
+}
+
+type extractState struct {
+	extractionModel        string
+	extractionEnabled      bool
+	extractionThinking     bool
+	extractionClient       *llm.Client
+	extractors             []extract.Extractor
+	extractionReady        bool
+	pendingExtractionDocID *uint
+	extraction             *extractionLogState
+	bgExtractions          []*extractionLogState
+}
 
 type TabKind int
 
@@ -85,6 +116,27 @@ func (k TabKind) singular() string {
 		return "vendor"
 	case tabDocuments:
 		return "doc"
+	}
+	panic(fmt.Sprintf("unhandled TabKind: %d", k))
+}
+
+// plural returns the lowercase plural noun for a tab kind.
+func (k TabKind) plural() string {
+	switch k {
+	case tabProjects:
+		return "projects"
+	case tabQuotes:
+		return "quotes"
+	case tabMaintenance:
+		return "maintenance items"
+	case tabIncidents:
+		return "incidents"
+	case tabAppliances:
+		return "appliances"
+	case tabVendors:
+		return "vendors"
+	case tabDocuments:
+		return "documents"
 	}
 	panic(fmt.Sprintf("unhandled TabKind: %d", k))
 }

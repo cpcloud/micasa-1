@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cpcloud/micasa/internal/data"
 	"github.com/cpcloud/micasa/internal/extract"
+	"github.com/cpcloud/micasa/internal/llm"
 	"github.com/cpcloud/micasa/internal/locale"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +40,7 @@ func newExtractionModel(steps map[extractionStep]stepStatus) *Model {
 			ex.hasLLM = true
 		}
 	}
-	m.extraction = ex
+	m.ex.extraction = ex
 	return m
 }
 
@@ -74,7 +75,7 @@ func TestExtractionCursor_JK_SkipsRunningSteps(t *testing.T) {
 		stepExtract: stepRunning,
 		stepLLM:     stepPending,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	assert.Equal(t, 0, ex.cursor)
 
 	// j should not move to the running extract step.
@@ -92,7 +93,7 @@ func TestExtractionCursor_JK_LandsOnSettledSteps(t *testing.T) {
 		stepExtract: stepDone,
 		stepLLM:     stepFailed,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	sendExtractionKey(m, "j")
@@ -113,7 +114,7 @@ func TestExtractionCursor_JK_AllStepsWhenDone(t *testing.T) {
 		stepText: stepDone,
 		stepLLM:  stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	sendExtractionKey(m, "j")
@@ -126,7 +127,7 @@ func TestExtractionEnter_TogglesDoneStep(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepText: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	// Text step is done, not auto-expanded. First enter should expand.
@@ -142,7 +143,7 @@ func TestExtractionEnter_TogglesAutoExpandedLLMStep(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	// LLM done step is auto-expanded. First enter should collapse.
@@ -158,7 +159,7 @@ func TestExtractionEnter_TogglesFailedStep(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepExtract: stepFailed,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 
 	// Failed steps are auto-expanded. First enter should collapse.
 	sendExtractionKey(m, "enter")
@@ -170,7 +171,7 @@ func TestExtractionEnter_NoOpOnRunningStep(t *testing.T) {
 		stepText:    stepDone,
 		stepExtract: stepRunning,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 	ex.cursor = 1 // force onto running step (shouldn't happen in practice)
 
@@ -187,7 +188,7 @@ func TestRerunLLM_MovesCursorToSettledStep(t *testing.T) {
 		stepExtract: stepDone,
 		stepLLM:     stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 	ex.cursor = 2 // on LLM step
 
@@ -201,7 +202,7 @@ func TestRerunLLM_CursorFallbackToZero(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 	ex.cursor = 0
 
@@ -219,8 +220,8 @@ func newPreviewModel(ops []extract.Operation) *Model {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	m.extraction.Done = true
-	m.extraction.operations = ops
+	m.ex.extraction.Done = true
+	m.ex.extraction.operations = ops
 	return m
 }
 
@@ -246,9 +247,9 @@ func TestRenderOperationPreview_TabbedInterface(t *testing.T) {
 	assert.Contains(t, out, "Garcia Plumbing")
 
 	// Interactive: switch to second tab to see documents.
-	m.extraction.exploring = true
-	m.extraction.enterExploreMode(m.cur)
-	m.extraction.previewTab = 1
+	m.ex.extraction.exploring = true
+	m.ex.extraction.enterExploreMode(m.cur)
+	m.ex.extraction.previewTab = 1
 	out = m.renderOperationPreviewSection(60, true)
 	assert.Contains(t, out, "Title")
 	assert.Contains(t, out, "Invoice")
@@ -345,7 +346,7 @@ func TestAcceptDeferredExtraction_CreatesDocument(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	// Simulate deferred creation with a pending doc.
@@ -376,7 +377,7 @@ func TestCancelDeferredExtraction_NothingPersisted(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepRunning,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.pendingDoc = &data.Document{
 		FileName: "invoice.pdf",
 		MIMEType: "application/pdf",
@@ -384,14 +385,14 @@ func TestCancelDeferredExtraction_NothingPersisted(t *testing.T) {
 
 	// Cancel should nil out extraction state.
 	m.cancelExtraction()
-	assert.Nil(t, m.extraction, "extraction should be nil after cancel")
+	assert.Nil(t, m.ex.extraction, "extraction should be nil after cancel")
 }
 
 func TestDeferredExtraction_PendingDocFieldPresent(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 	ex.pendingDoc = &data.Document{FileName: "scan.jpg"}
 
@@ -405,7 +406,7 @@ func TestExploreMode_XTogglesExploring(t *testing.T) {
 	m := newPreviewModel([]extract.Operation{
 		{Action: "create", Table: "vendors", Data: map[string]any{"name": "A"}},
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	assert.False(t, ex.exploring)
 
 	// x should enter explore mode when done with operations.
@@ -421,14 +422,14 @@ func TestExploreMode_EscExitsExploring(t *testing.T) {
 	m := newPreviewModel([]extract.Operation{
 		{Action: "create", Table: "vendors", Data: map[string]any{"name": "A"}},
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	sendExtractionKey(m, "x")
 	require.True(t, ex.exploring)
 
 	// Esc should exit explore mode, not cancel the overlay.
 	sendExtractionKey(m, "esc")
 	assert.False(t, ex.exploring, "esc should exit explore mode")
-	assert.NotNil(t, m.extraction, "overlay should still be open")
+	assert.NotNil(t, m.ex.extraction, "overlay should still be open")
 }
 
 func TestExploreMode_JKNavigatesRows(t *testing.T) {
@@ -436,7 +437,7 @@ func TestExploreMode_JKNavigatesRows(t *testing.T) {
 		{Action: "create", Table: "vendors", Data: map[string]any{"name": "A"}},
 		{Action: "create", Table: "vendors", Data: map[string]any{"name": "B"}},
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	sendExtractionKey(m, "x")
 	require.True(t, ex.exploring)
 	assert.Equal(t, 0, ex.previewRow)
@@ -457,7 +458,7 @@ func TestExploreMode_HLNavigatesCols(t *testing.T) {
 			"name": "A", "email": "a@b.com",
 		}},
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	sendExtractionKey(m, "x")
 	require.True(t, ex.exploring)
 	assert.Equal(t, 0, ex.previewCol)
@@ -474,7 +475,7 @@ func TestExploreMode_BFSwitchesTabs(t *testing.T) {
 		{Action: "create", Table: "vendors", Data: map[string]any{"name": "A"}},
 		{Action: "create", Table: "quotes", Data: map[string]any{"total_cents": float64(100)}},
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	sendExtractionKey(m, "x")
 	require.True(t, ex.exploring)
 	assert.Equal(t, 0, ex.previewTab)
@@ -491,14 +492,14 @@ func TestExploreMode_AcceptWorksInExploreMode(t *testing.T) {
 	m := newPreviewModel([]extract.Operation{
 		{Action: "create", Table: "vendors", Data: map[string]any{"name": "A"}},
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	sendExtractionKey(m, "x")
 	require.True(t, ex.exploring)
 
 	// a should accept even in explore mode. Without a store, dispatch is
 	// a silent no-op, so accept succeeds and clears extraction state.
 	sendExtractionKey(m, "a")
-	assert.Nil(t, m.extraction, "accept without store succeeds and clears state")
+	assert.Nil(t, m.ex.extraction, "accept without store succeeds and clears state")
 }
 
 // --- Model picker ---
@@ -508,7 +509,7 @@ func TestModelPicker_ROpensPickerOnDoneLLMStep(t *testing.T) {
 		stepText: stepDone,
 		stepLLM:  stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	// Move cursor to the LLM step.
@@ -528,7 +529,7 @@ func TestModelPicker_EscDismissesWithoutRerun(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	// Activate picker and manually populate it (skip async fetch).
@@ -550,7 +551,7 @@ func TestModelPicker_EnterSelectsModelAndReruns(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	// Activate and populate picker.
@@ -571,15 +572,15 @@ func TestModelPicker_EnterSelectsModelAndReruns(t *testing.T) {
 
 	// Picker should be dismissed and extraction model switched.
 	assert.Nil(t, ex.modelPicker, "picker should be dismissed after enter")
-	assert.Equal(t, "qwen3:8b", m.extractionModel, "extraction model should be updated")
-	assert.Nil(t, m.extractionClient, "client cache should be invalidated")
+	assert.Equal(t, "qwen3:8b", m.ex.extractionModel, "extraction model should be updated")
+	assert.Nil(t, m.ex.extractionClient, "client cache should be invalidated")
 }
 
 func TestModelPicker_FilterNarrowsMatches(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	sendExtractionKey(m, "r")
@@ -609,7 +610,7 @@ func TestModelPicker_ArrowsNavigateCursor(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	sendExtractionKey(m, "r")
@@ -640,7 +641,7 @@ func TestModelPicker_JKTypeInsteadOfNavigate(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 
 	sendExtractionKey(m, "r")
@@ -665,7 +666,7 @@ func TestModelPicker_RerunPreservesAllSteps(t *testing.T) {
 		stepExtract: stepDone,
 		stepLLM:     stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 	ex.Steps[stepExtract] = extractionStepInfo{
 		Status: stepDone,
@@ -704,7 +705,7 @@ func TestModelPicker_RerunPreservesAllSteps(t *testing.T) {
 
 	// LLM step should be running with the new model.
 	assert.Equal(t, stepRunning, ex.Steps[stepLLM].Status)
-	assert.Equal(t, "qwen3:8b", m.extractionModel)
+	assert.Equal(t, "qwen3:8b", m.ex.extractionModel)
 }
 
 func TestModelPicker_RerunRendersAllSteps(t *testing.T) {
@@ -713,7 +714,7 @@ func TestModelPicker_RerunRendersAllSteps(t *testing.T) {
 		stepExtract: stepDone,
 		stepLLM:     stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 	ex.Steps[stepExtract] = extractionStepInfo{
 		Status: stepDone,
@@ -747,7 +748,7 @@ func TestModelPicker_RNoOpWhenNotOnLLMStep(t *testing.T) {
 		stepText: stepDone,
 		stepLLM:  stepDone,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Done = true
 	// Cursor is on text step (index 0).
 
@@ -759,7 +760,7 @@ func TestModelPicker_RNoOpWhenNotDone(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepRunning,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 
 	sendExtractionKey(m, "r")
 	assert.Nil(t, ex.modelPicker, "r should not open picker when extraction is running")
@@ -776,7 +777,7 @@ func TestNeedsOCR_UsedInsteadOfHardcodedToolName(t *testing.T) {
 	})
 	// With no OCR extractors configured, startExtractionOverlay should
 	// not flag needsExtract.
-	assert.Nil(t, m.extractors, "default test model has no extractors")
+	assert.Nil(t, m.ex.extractors, "default test model has no extractors")
 }
 
 // --- Background extraction ---
@@ -786,26 +787,26 @@ func TestBackground_CtrlBMovesExtractionToBg(t *testing.T) {
 		stepText:    stepDone,
 		stepExtract: stepRunning,
 	})
-	require.NotNil(t, m.extraction)
-	require.True(t, m.extraction.Visible)
+	require.NotNil(t, m.ex.extraction)
+	require.True(t, m.ex.extraction.Visible)
 
 	sendExtractionKey(m, keyCtrlB)
 
-	assert.Nil(t, m.extraction, "foreground extraction should be nil after backgrounding")
-	require.Len(t, m.bgExtractions, 1)
-	assert.False(t, m.bgExtractions[0].Visible, "bg extraction should not be visible")
+	assert.Nil(t, m.ex.extraction, "foreground extraction should be nil after backgrounding")
+	require.Len(t, m.ex.bgExtractions, 1)
+	assert.False(t, m.ex.bgExtractions[0].Visible, "bg extraction should not be visible")
 }
 
 func TestBackground_CtrlBNoOpWhenDone(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepText: stepDone,
 	})
-	m.extraction.Done = true
+	m.ex.extraction.Done = true
 
 	sendExtractionKey(m, keyCtrlB)
 
-	assert.NotNil(t, m.extraction, "done extraction should not be backgrounded")
-	assert.Empty(t, m.bgExtractions)
+	assert.NotNil(t, m.ex.extraction, "done extraction should not be backgrounded")
+	assert.Empty(t, m.ex.bgExtractions)
 }
 
 func TestForeground_CtrlBBringsBgToFront(t *testing.T) {
@@ -813,20 +814,20 @@ func TestForeground_CtrlBBringsBgToFront(t *testing.T) {
 		stepText:    stepDone,
 		stepExtract: stepRunning,
 	})
-	m.extraction.Filename = "test.pdf"
+	m.ex.extraction.Filename = "test.pdf"
 
 	// Background it.
 	sendExtractionKey(m, keyCtrlB)
-	require.Nil(t, m.extraction)
-	require.Len(t, m.bgExtractions, 1)
+	require.Nil(t, m.ex.extraction)
+	require.Len(t, m.ex.bgExtractions, 1)
 
 	// Foreground it via ctrl+b in normal mode.
 	sendKey(m, keyCtrlB)
 
-	require.NotNil(t, m.extraction)
-	assert.True(t, m.extraction.Visible, "foregrounded extraction should be visible")
-	assert.Equal(t, "test.pdf", m.extraction.Filename)
-	assert.Empty(t, m.bgExtractions)
+	require.NotNil(t, m.ex.extraction)
+	assert.True(t, m.ex.extraction.Visible, "foregrounded extraction should be visible")
+	assert.Equal(t, "test.pdf", m.ex.extraction.Filename)
+	assert.Empty(t, m.ex.bgExtractions)
 }
 
 func TestForeground_SwapsCurrentToBackground(t *testing.T) {
@@ -834,15 +835,15 @@ func TestForeground_SwapsCurrentToBackground(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepExtract: stepRunning,
 	})
-	m.extraction.Filename = "first.pdf"
+	m.ex.extraction.Filename = "first.pdf"
 
 	// Background the first.
 	sendExtractionKey(m, keyCtrlB)
-	require.Len(t, m.bgExtractions, 1)
+	require.Len(t, m.ex.bgExtractions, 1)
 
 	// Create a new foreground extraction.
 	ctx, cancel := context.WithCancel(context.Background())
-	m.extraction = &extractionLogState{
+	m.ex.extraction = &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		Filename:   "second.pdf",
 		Visible:    true,
@@ -851,19 +852,19 @@ func TestForeground_SwapsCurrentToBackground(t *testing.T) {
 		expanded:   make(map[extractionStep]bool),
 		hasExtract: true,
 	}
-	m.extraction.Steps[stepExtract] = extractionStepInfo{Status: stepRunning}
+	m.ex.extraction.Steps[stepExtract] = extractionStepInfo{Status: stepRunning}
 
 	// ctrl+b on visible overlay backgrounds the second extraction.
 	sendExtractionKey(m, keyCtrlB)
-	assert.Nil(t, m.extraction)
-	require.Len(t, m.bgExtractions, 2)
+	assert.Nil(t, m.ex.extraction)
+	require.Len(t, m.ex.bgExtractions, 2)
 
 	// ctrl+b in normal mode foregrounds the most recent (second).
 	sendKey(m, keyCtrlB)
-	require.NotNil(t, m.extraction)
-	assert.Equal(t, "second.pdf", m.extraction.Filename)
-	require.Len(t, m.bgExtractions, 1)
-	assert.Equal(t, "first.pdf", m.bgExtractions[0].Filename)
+	require.NotNil(t, m.ex.extraction)
+	assert.Equal(t, "second.pdf", m.ex.extraction.Filename)
+	require.Len(t, m.ex.bgExtractions, 1)
+	assert.Equal(t, "first.pdf", m.ex.bgExtractions[0].Filename)
 }
 
 func TestBgExtraction_CompletionNotifiesNoAutoAccept(t *testing.T) {
@@ -871,13 +872,13 @@ func TestBgExtraction_CompletionNotifiesNoAutoAccept(t *testing.T) {
 		stepText: stepDone,
 		stepLLM:  stepRunning,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Filename = "invoice.pdf"
 	id := ex.ID
 
 	// Background the extraction.
 	sendExtractionKey(m, keyCtrlB)
-	require.Len(t, m.bgExtractions, 1)
+	require.Len(t, m.ex.bgExtractions, 1)
 
 	// Simulate LLM completion on the background extraction.
 	m.handleExtractionLLMChunk(extractionLLMChunkMsg{
@@ -890,8 +891,8 @@ func TestBgExtraction_CompletionNotifiesNoAutoAccept(t *testing.T) {
 	})
 
 	// Extraction should still be in bgExtractions (no auto-accept).
-	require.Len(t, m.bgExtractions, 1)
-	assert.True(t, m.bgExtractions[0].Done, "bg extraction should be done")
+	require.Len(t, m.ex.bgExtractions, 1)
+	assert.True(t, m.ex.bgExtractions[0].Done, "bg extraction should be done")
 	assert.Contains(t, m.status.Text, "invoice.pdf", "status should mention filename")
 }
 
@@ -899,13 +900,13 @@ func TestBgExtraction_ErrorStaysInList(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepLLM: stepRunning,
 	})
-	ex := m.extraction
+	ex := m.ex.extraction
 	ex.Filename = "bad.pdf"
 	id := ex.ID
 
 	// Background it.
 	sendExtractionKey(m, keyCtrlB)
-	require.Len(t, m.bgExtractions, 1)
+	require.Len(t, m.ex.bgExtractions, 1)
 
 	// Simulate LLM error.
 	m.handleExtractionLLMChunk(extractionLLMChunkMsg{
@@ -915,8 +916,8 @@ func TestBgExtraction_ErrorStaysInList(t *testing.T) {
 	})
 
 	// Should remain in bg list with error.
-	require.Len(t, m.bgExtractions, 1)
-	assert.True(t, m.bgExtractions[0].HasError)
+	require.Len(t, m.ex.bgExtractions, 1)
+	assert.True(t, m.ex.bgExtractions[0].HasError)
 	assert.Contains(t, m.status.Text, "bad.pdf")
 }
 
@@ -924,14 +925,14 @@ func TestMultipleBgExtractions(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepExtract: stepRunning,
 	})
-	m.extraction.Filename = "a.pdf"
+	m.ex.extraction.Filename = "a.pdf"
 
 	// Background first.
 	sendExtractionKey(m, keyCtrlB)
 
 	// Create and background second.
 	ctx, cancel := context.WithCancel(context.Background())
-	m.extraction = &extractionLogState{
+	m.ex.extraction = &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		Filename:   "b.pdf",
 		Visible:    true,
@@ -940,26 +941,26 @@ func TestMultipleBgExtractions(t *testing.T) {
 		expanded:   make(map[extractionStep]bool),
 		hasExtract: true,
 	}
-	m.extraction.Steps[stepExtract] = extractionStepInfo{Status: stepRunning}
+	m.ex.extraction.Steps[stepExtract] = extractionStepInfo{Status: stepRunning}
 	sendExtractionKey(m, keyCtrlB)
 
-	require.Len(t, m.bgExtractions, 2)
-	assert.Equal(t, "a.pdf", m.bgExtractions[0].Filename)
-	assert.Equal(t, "b.pdf", m.bgExtractions[1].Filename)
+	require.Len(t, m.ex.bgExtractions, 2)
+	assert.Equal(t, "a.pdf", m.ex.bgExtractions[0].Filename)
+	assert.Equal(t, "b.pdf", m.ex.bgExtractions[1].Filename)
 
 	// Foreground pops most recent (b.pdf).
 	sendKey(m, keyCtrlB)
-	require.NotNil(t, m.extraction)
-	assert.Equal(t, "b.pdf", m.extraction.Filename)
-	require.Len(t, m.bgExtractions, 1)
+	require.NotNil(t, m.ex.extraction)
+	assert.Equal(t, "b.pdf", m.ex.extraction.Filename)
+	require.Len(t, m.ex.bgExtractions, 1)
 }
 
 func TestStartExtraction_AutoBackgroundsExisting(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepExtract: stepRunning,
 	})
-	m.extraction.Filename = "existing.pdf"
-	existingID := m.extraction.ID
+	m.ex.extraction.Filename = "existing.pdf"
+	existingID := m.ex.extraction.ID
 
 	// Manually create a new extraction state and assign it as if
 	// startExtractionOverlay ran successfully (the real function needs
@@ -967,7 +968,7 @@ func TestStartExtraction_AutoBackgroundsExisting(t *testing.T) {
 	// This tests the backgrounding logic directly.
 	m.backgroundExtraction()
 	ctx, cancel := context.WithCancel(context.Background())
-	m.extraction = &extractionLogState{
+	m.ex.extraction = &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		Filename:   "new.pdf",
 		Visible:    true,
@@ -976,12 +977,12 @@ func TestStartExtraction_AutoBackgroundsExisting(t *testing.T) {
 		expanded:   make(map[extractionStep]bool),
 		hasExtract: true,
 	}
-	m.extraction.Steps[stepExtract] = extractionStepInfo{Status: stepRunning}
+	m.ex.extraction.Steps[stepExtract] = extractionStepInfo{Status: stepRunning}
 
-	require.Len(t, m.bgExtractions, 1)
-	assert.Equal(t, "existing.pdf", m.bgExtractions[0].Filename)
-	assert.Equal(t, existingID, m.bgExtractions[0].ID)
-	assert.Equal(t, "new.pdf", m.extraction.Filename)
+	require.Len(t, m.ex.bgExtractions, 1)
+	assert.Equal(t, "existing.pdf", m.ex.bgExtractions[0].Filename)
+	assert.Equal(t, existingID, m.ex.bgExtractions[0].ID)
+	assert.Equal(t, "new.pdf", m.ex.extraction.Filename)
 }
 
 func TestSpinnerTick_UpdatesBgExtractions(t *testing.T) {
@@ -991,9 +992,9 @@ func TestSpinnerTick_UpdatesBgExtractions(t *testing.T) {
 
 	// Background the extraction.
 	sendExtractionKey(m, keyCtrlB)
-	require.Len(t, m.bgExtractions, 1)
+	require.Len(t, m.ex.bgExtractions, 1)
 
-	bg := m.bgExtractions[0]
+	bg := m.ex.bgExtractions[0]
 	initialView := bg.Spinner.View()
 
 	// Send a spinner tick -- should update the bg spinner.
@@ -1009,14 +1010,14 @@ func TestCtrlQ_CancelsAllBgExtractions(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepExtract: stepRunning,
 	})
-	m.extraction.Filename = "fg.pdf"
+	m.ex.extraction.Filename = "fg.pdf"
 
 	// Background it.
 	sendExtractionKey(m, keyCtrlB)
 
 	// Create another foreground extraction.
 	ctx, cancel := context.WithCancel(context.Background())
-	m.extraction = &extractionLogState{
+	m.ex.extraction = &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		Filename:   "fg2.pdf",
 		Visible:    true,
@@ -1025,27 +1026,27 @@ func TestCtrlQ_CancelsAllBgExtractions(t *testing.T) {
 		expanded:   make(map[extractionStep]bool),
 		hasExtract: true,
 	}
-	m.extraction.Steps[stepExtract] = extractionStepInfo{Status: stepRunning}
+	m.ex.extraction.Steps[stepExtract] = extractionStepInfo{Status: stepRunning}
 
-	require.Len(t, m.bgExtractions, 1)
-	require.NotNil(t, m.extraction)
+	require.Len(t, m.ex.bgExtractions, 1)
+	require.NotNil(t, m.ex.extraction)
 
 	// ctrl+c should cancel all.
 	sendKey(m, "ctrl+c")
 
-	assert.Nil(t, m.extraction)
-	assert.Empty(t, m.bgExtractions)
+	assert.Nil(t, m.ex.extraction)
+	assert.Empty(t, m.ex.bgExtractions)
 }
 
 func TestStatusBar_ShowsBgExtractionIndicator(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepExtract: stepRunning,
 	})
-	m.extraction.Filename = "test.pdf"
+	m.ex.extraction.Filename = "test.pdf"
 
 	// Background it.
 	sendExtractionKey(m, keyCtrlB)
-	require.Len(t, m.bgExtractions, 1)
+	require.Len(t, m.ex.bgExtractions, 1)
 
 	status := m.statusView()
 	assert.Contains(t, status, "1 extracting", "status bar should show bg extraction count")
@@ -1055,13 +1056,13 @@ func TestStatusBar_ShowsReadyCount(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepText: stepDone,
 	})
-	m.extraction.Done = true
-	m.extraction.Filename = "done.pdf"
+	m.ex.extraction.Done = true
+	m.ex.extraction.Filename = "done.pdf"
 
 	// Manually move to bgExtractions (simulating a bg completion).
-	m.extraction.Visible = false
-	m.bgExtractions = append(m.bgExtractions, m.extraction)
-	m.extraction = nil
+	m.ex.extraction.Visible = false
+	m.ex.bgExtractions = append(m.ex.bgExtractions, m.ex.extraction)
+	m.ex.extraction = nil
 
 	status := m.statusView()
 	assert.Contains(t, status, "1 ready", "status bar should show ready count")
@@ -1071,21 +1072,21 @@ func TestFindExtraction_FindsForeground(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepText: stepDone,
 	})
-	id := m.extraction.ID
+	id := m.ex.extraction.ID
 
 	found := m.findExtraction(id)
-	assert.Equal(t, m.extraction, found)
+	assert.Equal(t, m.ex.extraction, found)
 }
 
 func TestFindExtraction_FindsBackground(t *testing.T) {
 	m := newExtractionModel(map[extractionStep]stepStatus{
 		stepExtract: stepRunning,
 	})
-	id := m.extraction.ID
+	id := m.ex.extraction.ID
 
 	// Background it.
 	sendExtractionKey(m, keyCtrlB)
-	require.Nil(t, m.extraction)
+	require.Nil(t, m.ex.extraction)
 
 	found := m.findExtraction(id)
 	require.NotNil(t, found)
@@ -1098,4 +1099,60 @@ func TestFindExtraction_ReturnsNilForUnknownID(t *testing.T) {
 	})
 	found := m.findExtraction(999999)
 	assert.Nil(t, found)
+}
+
+func TestWaitForExtractProgressOpenChannel(t *testing.T) {
+	ch := make(chan extract.ExtractProgress, 1)
+	ch <- extract.ExtractProgress{Phase: "rasterize", Page: 1, Total: 3}
+
+	cmd := waitForExtractProgress(42, ch)
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(extractionProgressMsg)
+	require.True(t, ok)
+	assert.Equal(t, uint64(42), result.ID)
+	assert.Equal(t, "rasterize", result.Progress.Phase)
+}
+
+func TestWaitForExtractProgressClosedChannel(t *testing.T) {
+	ch := make(chan extract.ExtractProgress)
+	close(ch)
+
+	cmd := waitForExtractProgress(7, ch)
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(extractionProgressMsg)
+	require.True(t, ok)
+	assert.Equal(t, uint64(7), result.ID)
+	assert.True(t, result.Progress.Done)
+}
+
+func TestWaitForLLMChunkOpenChannel(t *testing.T) {
+	ch := make(chan llm.StreamChunk, 1)
+	ch <- llm.StreamChunk{Content: "hello", Done: false}
+
+	cmd := waitForLLMChunk(10, ch)
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(extractionLLMChunkMsg)
+	require.True(t, ok)
+	assert.Equal(t, uint64(10), result.ID)
+	assert.Equal(t, "hello", result.Content)
+	assert.False(t, result.Done)
+}
+
+func TestWaitForLLMChunkClosedChannel(t *testing.T) {
+	ch := make(chan llm.StreamChunk)
+	close(ch)
+
+	cmd := waitForLLMChunk(10, ch)
+	require.NotNil(t, cmd)
+
+	msg := cmd()
+	result, ok := msg.(extractionLLMChunkMsg)
+	require.True(t, ok)
+	assert.True(t, result.Done)
 }

@@ -171,62 +171,42 @@ type notePreviewState struct {
 }
 
 type Model struct {
-	store                  *data.Store
-	dbPath                 string
-	configPath             string
-	llmClient              *llm.Client
-	llmExtraContext        string              // user-provided context appended to prompts
-	extractionModel        string              // model for extraction; empty = same as chat
-	extractionEnabled      bool                // LLM extraction on document upload
-	extractionThinking     bool                // enable model thinking mode
-	extractionClient       *llm.Client         // cached extraction LLM client
-	extractors             []extract.Extractor // configured extractors
-	extractionReady        bool                // true once extraction model confirmed available
-	pendingExtractionDocID *uint               // doc saved without LLM; extract after pull
-	pull                   pullState
-	extraction             *extractionLogState   // non-nil when extraction overlay is active
-	bgExtractions          []*extractionLogState // backgrounded extractions (running or done)
-	chat                   *chatState            // non-nil when chat overlay is open
-	styles                 *Styles
-	tabs                   []Tab
-	active                 int
-	detailStack            []*detailContext // drilldown stack; top is active detail view
-	width                  int
-	height                 int
-	helpViewport           *viewport.Model
-	showHouse              bool
-	showDashboard          bool
-	notePreview            *notePreviewState
-	calendar               *calendarState
-	columnFinder           *columnFinderState
-	dash                   dashState
-	unitSystem             data.UnitSystem
-	hasHouse               bool
-	house                  data.HouseProfile
-	mode                   Mode
-	prevMode               Mode // mode to restore after form closes
-	formKind               FormKind
-	form                   *huh.Form
-	formData               any
-	formSnapshot           any
-	formDirty              bool
-	confirmDiscard         bool // true when showing "discard unsaved changes?" prompt
-	confirmQuit            bool // true when discard was triggered by ctrl+q (quit after confirm)
-	formHasRequired        bool
-	pendingFormInit        tea.Cmd // cached Init cmd from activateForm
-	editID                 *uint
-	inlineInput            *inlineInputState
-	notesEditMode          bool    // true when a notes textarea overlay is active
-	notesFieldPtr          *string // pointer into formData for the notes field
-	pendingEditor          *editorState
-	undoStack              []undoEntry
-	redoStack              []undoEntry
-	magMode                bool // easter egg: display numbers as order-of-magnitude
-	cur                    locale.Currency
-	status                 statusMsg
-	projectTypes           []data.ProjectType
-	maintenanceCategories  []data.MaintenanceCategory
-	vendors                []data.Vendor
+	store                 *data.Store
+	dbPath                string
+	configPath            string
+	llmClient             *llm.Client
+	llmExtraContext       string // user-provided context appended to prompts
+	ex                    extractState
+	pull                  pullState
+	chat                  *chatState // non-nil when chat overlay is open
+	styles                *Styles
+	tabs                  []Tab
+	active                int
+	detailStack           []*detailContext // drilldown stack; top is active detail view
+	width                 int
+	height                int
+	helpViewport          *viewport.Model
+	showHouse             bool
+	showDashboard         bool
+	notePreview           *notePreviewState
+	calendar              *calendarState
+	columnFinder          *columnFinderState
+	dash                  dashState
+	unitSystem            data.UnitSystem
+	hasHouse              bool
+	house                 data.HouseProfile
+	mode                  Mode
+	prevMode              Mode // mode to restore after form closes
+	fs                    formState
+	inlineInput           *inlineInputState
+	undoStack             []undoEntry
+	redoStack             []undoEntry
+	magMode               bool // easter egg: display numbers as order-of-magnitude
+	cur                   locale.Currency
+	status                statusMsg
+	projectTypes          []data.ProjectType
+	maintenanceCategories []data.MaintenanceCategory
+	vendors               []data.Vendor
 }
 
 func NewModel(store *data.Store, options Options) (*Model, error) {
@@ -260,22 +240,24 @@ func NewModel(store *data.Store, options Options) (*Model, error) {
 	pprog.PercentageStyle = appStyles.TextDim()
 
 	model := &Model{
-		store:              store,
-		dbPath:             options.DBPath,
-		configPath:         options.ConfigPath,
-		llmClient:          client,
-		llmExtraContext:    extraContext,
-		extractionModel:    options.ExtractionConfig.Model,
-		extractionEnabled:  options.ExtractionConfig.Enabled,
-		extractionThinking: options.ExtractionConfig.Thinking,
-		extractors:         options.ExtractionConfig.Extractors,
-		pull:               pullState{progress: pprog},
-		styles:             appStyles,
-		tabs:               NewTabs(),
-		active:             0,
-		showHouse:          false,
-		mode:               modeNormal,
-		cur:                store.Currency(),
+		store:           store,
+		dbPath:          options.DBPath,
+		configPath:      options.ConfigPath,
+		llmClient:       client,
+		llmExtraContext: extraContext,
+		ex: extractState{
+			extractionModel:    options.ExtractionConfig.Model,
+			extractionEnabled:  options.ExtractionConfig.Enabled,
+			extractionThinking: options.ExtractionConfig.Thinking,
+			extractors:         options.ExtractionConfig.Extractors,
+		},
+		pull:      pullState{progress: pprog},
+		styles:    appStyles,
+		tabs:      NewTabs(),
+		active:    0,
+		showHouse: false,
+		mode:      modeNormal,
+		cur:       store.Currency(),
 	}
 	// Best-effort: fall back to locale detection if setting unreadable.
 	model.unitSystem, _ = store.GetUnitSystem()
@@ -315,9 +297,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateAllViewports()
 	case tea.KeyMsg:
 		if typed.String() == keyCtrlQ {
-			if m.mode == modeForm && m.formDirty {
-				m.confirmDiscard = true
-				m.confirmQuit = true
+			if m.mode == modeForm && m.fs.formDirty {
+				m.fs.confirmDiscard = true
+				m.fs.confirmQuit = true
 				return m, nil
 			}
 			m.cancelChatOperations()
@@ -362,7 +344,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleExtractionLLMChunk(typed)
 	case modelsListMsg:
 		// Feed the extraction model picker first if it's waiting.
-		if ex := m.extraction; ex != nil && ex.modelPicker != nil && ex.modelPicker.Loading {
+		if ex := m.ex.extraction; ex != nil && ex.modelPicker != nil && ex.modelPicker.Loading {
 			ex.modelPicker.Loading = false
 			if typed.Err == nil {
 				ex.modelPicker.All = mergeModelLists(typed.Models)
@@ -384,12 +366,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshChatViewport()
 			cmds = append(cmds, cmd)
 		}
-		if m.extraction != nil && !m.extraction.Done {
+		if m.ex.extraction != nil && !m.ex.extraction.Done {
 			var cmd tea.Cmd
-			m.extraction.Spinner, cmd = m.extraction.Spinner.Update(msg)
+			m.ex.extraction.Spinner, cmd = m.ex.extraction.Spinner.Update(msg)
 			cmds = append(cmds, cmd)
 		}
-		for _, bg := range m.bgExtractions {
+		for _, bg := range m.ex.bgExtractions {
 			if !bg.Done {
 				var cmd tea.Cmd
 				bg.Spinner, cmd = bg.Spinner.Update(msg)
@@ -406,73 +388,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleEditorFinished(typed)
 	}
 
-	// Help overlay: delegate scrolling to the viewport, esc or ? dismisses.
-	if m.helpViewport != nil {
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			switch {
-			case keyMsg.String() == keyEsc || keyMsg.String() == keyQuestion:
-				m.helpViewport = nil
-			case key.Matches(keyMsg, helpGotoTop):
-				m.helpViewport.GotoTop()
-			case key.Matches(keyMsg, helpGotoBottom):
-				m.helpViewport.GotoBottom()
-			default:
-				vp, _ := m.helpViewport.Update(keyMsg)
-				m.helpViewport = &vp
-			}
-		}
-		return m, nil
+	if cmd, handled := m.dispatchOverlay(msg); handled {
+		return m, cmd
 	}
 
-	// Extraction overlay: absorb all keys when visible.
-	if m.extraction != nil && m.extraction.Visible {
-		if typed, ok := msg.(tea.KeyMsg); ok {
-			return m, m.handleExtractionKey(typed)
-		}
-		return m, nil
-	}
-
-	// Chat overlay: absorb all keys when visible.
-	if m.chat != nil && m.chat.Visible {
-		if typed, ok := msg.(tea.KeyMsg); ok {
-			return m.handleChatKey(typed)
-		}
-		return m, nil
-	}
-
-	// Note preview overlay: any key dismisses it.
-	if m.notePreview != nil {
-		if _, ok := msg.(tea.KeyMsg); ok {
-			m.notePreview = nil
-		}
-		return m, nil
-	}
-
-	// Calendar date picker: absorb all keys.
-	if m.calendar != nil {
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			return m.handleCalendarKey(keyMsg)
-		}
-		return m, nil
-	}
-
-	// Column finder overlay: absorb all keys.
-	if m.columnFinder != nil {
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			return m, m.handleColumnFinderKey(keyMsg)
-		}
-		return m, nil
-	}
-
-	// Inline text input: absorb all keys.
-	if m.inlineInput != nil {
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			return m.handleInlineInputKey(keyMsg)
-		}
-		return m, nil
-	}
-
-	if m.mode == modeForm && m.form != nil {
+	if m.mode == modeForm && m.fs.form != nil {
 		return m.updateForm(msg)
 	}
 
@@ -517,7 +437,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateForm handles input while a form is active.
 func (m *Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle confirm-discard dialog: only y/n/esc are active.
-	if m.confirmDiscard {
+	if m.fs.confirmDiscard {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			return m.handleConfirmDiscard(keyMsg)
 		}
@@ -526,7 +446,7 @@ func (m *Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == keyCtrlS {
 		return m, m.saveFormInPlace()
 	}
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == keyCtrlE && m.notesEditMode {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == keyCtrlE && m.fs.notesEditMode {
 		return m, m.launchExternalEditor()
 	}
 	// Block huh's deferred WindowSizeMsg from reaching the form. Without
@@ -539,31 +459,31 @@ func (m *Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// Intercept 1-9 on Select fields to jump to the Nth option.
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		if n, isOrdinal := selectOrdinal(keyMsg); isOrdinal && isSelectField(m.form) {
+		if n, isOrdinal := selectOrdinal(keyMsg); isOrdinal && isSelectField(m.fs.form) {
 			m.jumpSelectToOrdinal(n)
 			return m, nil
 		}
 	}
 	// Intercept ESC on dirty forms to confirm before discarding.
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == keyEsc {
-		mandatoryHouse := m.formKind == formHouse && !m.hasHouse
-		if m.formDirty && !mandatoryHouse {
-			m.confirmDiscard = true
+		mandatoryHouse := m.fs.formKind == formHouse && !m.hasHouse
+		if m.fs.formDirty && !mandatoryHouse {
+			m.fs.confirmDiscard = true
 			return m, nil
 		}
 	}
-	updated, cmd := m.form.Update(msg)
+	updated, cmd := m.fs.form.Update(msg)
 	form, ok := updated.(*huh.Form)
 	if ok {
-		m.form = form
+		m.fs.form = form
 	}
-	syncFilePickerTitle(m.form)
+	syncFilePickerTitle(m.fs.form)
 	m.checkFormDirty()
-	switch m.form.State {
+	switch m.fs.form.State {
 	case huh.StateCompleted:
 		return m, m.saveForm()
 	case huh.StateAborted:
-		if m.formKind == formHouse && !m.hasHouse {
+		if m.fs.formKind == formHouse && !m.hasHouse {
 			m.setStatusError("House profile required.")
 			m.startHouseForm()
 			return m, m.formInitCmd()
@@ -579,17 +499,17 @@ func (m *Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) handleConfirmDiscard(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case keyY:
-		m.confirmDiscard = false
-		if m.confirmQuit {
-			m.confirmQuit = false
+		m.fs.confirmDiscard = false
+		if m.fs.confirmQuit {
+			m.fs.confirmQuit = false
 			m.cancelChatOperations()
 			m.cancelPull()
 			return m, tea.Quit
 		}
 		m.exitForm()
 	case keyN, keyEsc:
-		m.confirmDiscard = false
-		m.confirmQuit = false
+		m.fs.confirmDiscard = false
+		m.fs.confirmQuit = false
 	}
 	return m, nil
 }
@@ -704,7 +624,7 @@ func (m *Model) handleCommonKeys(key tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		return nil, true
 	case keyCtrlB:
-		if len(m.bgExtractions) > 0 {
+		if len(m.ex.bgExtractions) > 0 {
 			m.foregroundExtraction()
 			return nil, true
 		}
@@ -945,7 +865,7 @@ func (m *Model) handleEditKeys(key tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-func (m *Model) handleCalendarKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleCalendarKey(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case keyH, keyLeft:
 		calendarMove(m.calendar, -1)
@@ -971,7 +891,7 @@ func (m *Model) handleCalendarKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.calendar = nil
 		m.resetFormState()
 	}
-	return m, nil
+	return nil
 }
 
 func (m *Model) confirmCalendar() {
@@ -1886,12 +1806,12 @@ func (m *Model) statusLines() int {
 // checkExtractionModelCmd returns a tea.Cmd that checks whether the extraction
 // model is available on the Ollama server. If missing, it initiates a pull.
 func (m *Model) checkExtractionModelCmd() tea.Cmd {
-	if !m.extractionEnabled || m.llmClient == nil {
+	if !m.ex.extractionEnabled || m.llmClient == nil {
 		return nil
 	}
 
 	// Resolve which model to check: extraction-specific or chat model.
-	model := m.extractionModel
+	model := m.ex.extractionModel
 	if model == "" {
 		model = m.llmClient.Model()
 	}
@@ -1948,12 +1868,12 @@ func (m *Model) handlePullProgress(msg pullProgressMsg) tea.Cmd {
 		m.clearPullState()
 		m.status = statusMsg{}
 		// Mark extraction model as ready if it matches.
-		exModel := m.extractionModel
+		exModel := m.ex.extractionModel
 		if exModel == "" && m.llmClient != nil {
 			exModel = m.llmClient.Model()
 		}
 		if msg.Model != "" && (msg.Model == exModel || strings.HasPrefix(msg.Model, exModel+":")) {
-			m.extractionReady = true
+			m.ex.extractionReady = true
 		}
 		// Chat-initiated pulls switch the active model.
 		if fromChat {
@@ -1971,9 +1891,9 @@ func (m *Model) handlePullProgress(msg pullProgressMsg) tea.Cmd {
 		}
 		m.resizeTables()
 		// Extract hints for the pending document now that the model is available.
-		if m.extractionReady && m.pendingExtractionDocID != nil {
-			docID := *m.pendingExtractionDocID
-			m.pendingExtractionDocID = nil
+		if m.ex.extractionReady && m.ex.pendingExtractionDocID != nil {
+			docID := *m.ex.pendingExtractionDocID
+			m.ex.pendingExtractionDocID = nil
 			doc, err := m.store.GetDocument(docID)
 			if err == nil {
 				return m.startExtractionOverlay(
@@ -1983,7 +1903,7 @@ func (m *Model) handlePullProgress(msg pullProgressMsg) tea.Cmd {
 		}
 		// Auto-rerun extraction if the overlay is open and waiting for a
 		// model that just finished pulling.
-		if m.extractionReady && m.extraction != nil && m.extraction.Done && !fromChat {
+		if m.ex.extractionReady && m.ex.extraction != nil && m.ex.extraction.Done && !fromChat {
 			return m.rerunLLMExtraction()
 		}
 		return nil
@@ -2026,13 +1946,13 @@ func (m *Model) formatPullProgress(msg pullProgressMsg) string {
 // extractionLLMClient returns the LLM client configured for extraction,
 // or nil if extraction is not available. The client is created once and cached.
 func (m *Model) extractionLLMClient() *llm.Client {
-	if m.extractionClient != nil {
-		return m.extractionClient
+	if m.ex.extractionClient != nil {
+		return m.ex.extractionClient
 	}
 	if m.llmClient == nil {
 		return nil
 	}
-	model := m.extractionModel
+	model := m.ex.extractionModel
 	if model == "" {
 		model = m.llmClient.Model()
 	}
@@ -2041,8 +1961,8 @@ func (m *Model) extractionLLMClient() *llm.Client {
 		model,
 		m.llmClient.Timeout(),
 	)
-	c.SetThinking(m.extractionThinking)
-	m.extractionClient = c
+	c.SetThinking(m.ex.extractionThinking)
+	m.ex.extractionClient = c
 	return c
 }
 
@@ -2051,10 +1971,10 @@ func (m *Model) extractionLLMClient() *llm.Client {
 // steps are needed. If the LLM model isn't ready yet, it queues the doc for
 // extraction after the model pull completes.
 func (m *Model) afterDocumentSave() tea.Cmd {
-	if m.editID == nil {
+	if m.fs.editID == nil {
 		return nil
 	}
-	docID := *m.editID
+	docID := *m.fs.editID
 
 	// Load the saved document to get its current state.
 	doc, err := m.store.GetDocument(docID)
@@ -2063,16 +1983,16 @@ func (m *Model) afterDocumentSave() tea.Cmd {
 	}
 
 	// Check if LLM extraction is configured and ready.
-	llmReady := m.extractionEnabled && m.extractionLLMClient() != nil && m.extractionReady
+	llmReady := m.ex.extractionEnabled && m.extractionLLMClient() != nil && m.ex.extractionReady
 
 	// Determine if async extraction is needed.
-	needsExtract := extract.NeedsOCR(m.extractors, doc.MIMEType)
+	needsExtract := extract.NeedsOCR(m.ex.extractors, doc.MIMEType)
 
 	// If nothing async is needed, bail early.
 	if !needsExtract && !llmReady {
 		// If LLM is configured but model not ready, queue for after pull.
-		if m.extractionEnabled && m.llmClient != nil && !m.extractionReady {
-			m.pendingExtractionDocID = &docID
+		if m.ex.extractionEnabled && m.llmClient != nil && !m.ex.extractionReady {
+			m.ex.pendingExtractionDocID = &docID
 			if !m.pull.active {
 				m.setStatusInfo("checking extraction model" + symEllipsis)
 				return m.checkExtractionModelCmd()
@@ -2105,13 +2025,13 @@ func (m *Model) clearPullState() {
 
 func (m *Model) saveForm() tea.Cmd {
 	// Deferred document creation: hold doc in memory, open extraction overlay.
-	if fd, ok := m.formData.(*documentFormData); ok && fd.DeferCreate {
+	if fd, ok := m.fs.formData.(*documentFormData); ok && fd.DeferCreate {
 		return m.saveDeferredDocumentForm()
 	}
 
-	isFirstHouse := m.formKind == formHouse && !m.hasHouse
+	isFirstHouse := m.fs.formKind == formHouse && !m.hasHouse
 	m.snapshotForUndo()
-	kind := m.formKind
+	kind := m.fs.formKind
 	err := m.handleFormSubmit()
 	if err != nil {
 		m.setStatusError(err.Error())
@@ -2132,12 +2052,12 @@ func (m *Model) saveForm() tea.Cmd {
 // so the user can continue editing after a Ctrl+S save.
 func (m *Model) saveFormInPlace() tea.Cmd {
 	// Deferred creation: Ctrl+S acts the same as Enter for quick-add.
-	if fd, ok := m.formData.(*documentFormData); ok && fd.DeferCreate {
+	if fd, ok := m.fs.formData.(*documentFormData); ok && fd.DeferCreate {
 		return m.saveDeferredDocumentForm()
 	}
 	m.snapshotForUndo()
-	kind := m.formKind
-	isCreate := m.editID == nil
+	kind := m.fs.formKind
+	isCreate := m.fs.editID == nil
 	err := m.handleFormSubmit()
 	if err != nil {
 		m.setStatusError(err.Error())
@@ -2148,9 +2068,9 @@ func (m *Model) saveFormInPlace() tea.Cmd {
 	m.reloadAfterFormSave(kind)
 	// After a create, position the cursor on the new row so that
 	// subsequent Esc leaves the user on the item they just created.
-	if isCreate && m.editID != nil {
+	if isCreate && m.fs.editID != nil {
 		if tab := m.effectiveTab(); tab != nil {
-			selectRowByID(tab, *m.editID)
+			selectRowByID(tab, *m.fs.editID)
 		}
 	}
 	return m.afterDocumentSaveIfNeeded(kind)
@@ -2192,7 +2112,7 @@ func (m *Model) saveDeferredDocumentForm() tea.Cmd {
 		m.reloadAfterMutation()
 		return nil
 	}
-	m.extraction.pendingDoc = &doc
+	m.ex.extraction.pendingDoc = &doc
 	if result.ExtractErr != nil {
 		m.setStatusInfo(fmt.Sprintf("extraction incomplete: %s", result.ExtractErr))
 	}
@@ -2219,12 +2139,12 @@ func (m *Model) reloadAfterFormSave(kind FormKind) {
 }
 
 func (m *Model) snapshotForm() {
-	m.formSnapshot = cloneFormData(m.formData)
-	m.formDirty = false
+	m.fs.formSnapshot = cloneFormData(m.fs.formData)
+	m.fs.formDirty = false
 }
 
 func (m *Model) checkFormDirty() {
-	m.formDirty = !reflect.DeepEqual(m.formData, m.formSnapshot)
+	m.fs.formDirty = !reflect.DeepEqual(m.fs.formData, m.fs.formSnapshot)
 }
 
 // cloneFormData makes a shallow copy of the struct behind a form-data
@@ -2279,18 +2199,18 @@ func (m *Model) openHelp() {
 	m.helpViewport = &vp
 }
 
-func (m *Model) handleInlineInputKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleInlineInputKey(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case keyEsc:
 		m.closeInlineInput()
-		return m, nil
+		return nil
 	case keyEnter:
 		m.submitInlineInput()
-		return m, nil
+		return nil
 	}
 	var cmd tea.Cmd
 	m.inlineInput.Input, cmd = m.inlineInput.Input.Update(key)
-	return m, cmd
+	return cmd
 }
 
 func (m *Model) submitInlineInput() {
@@ -2317,16 +2237,16 @@ func (m *Model) submitInlineInput() {
 // resetFormState zeroes all form-related fields. Every path that exits a
 // form, inline edit, or calendar overlay should call this to prevent drift.
 func (m *Model) resetFormState() {
-	m.formKind = formNone
-	m.form = nil
-	m.formData = nil
-	m.formSnapshot = nil
-	m.formDirty = false
-	m.confirmDiscard = false
-	m.pendingFormInit = nil
-	m.editID = nil
-	m.notesEditMode = false
-	m.notesFieldPtr = nil
+	m.fs.formKind = formNone
+	m.fs.form = nil
+	m.fs.formData = nil
+	m.fs.formSnapshot = nil
+	m.fs.formDirty = false
+	m.fs.confirmDiscard = false
+	m.fs.pendingFormInit = nil
+	m.fs.editID = nil
+	m.fs.notesEditMode = false
+	m.fs.notesFieldPtr = nil
 }
 
 func (m *Model) closeInlineInput() {
@@ -2338,7 +2258,7 @@ func (m *Model) closeInlineInput() {
 // set (item was saved at least once), the cursor moves to that row so the
 // user lands on the item they were just editing/creating.
 func (m *Model) exitForm() {
-	savedID := m.editID
+	savedID := m.fs.editID
 	m.mode = m.prevMode
 	// Restore correct table key bindings for the returning mode.
 	if m.mode == modeEdit {
@@ -2381,8 +2301,8 @@ func (m *Model) surfaceError(err error) {
 }
 
 func (m *Model) formInitCmd() tea.Cmd {
-	cmd := m.pendingFormInit
-	m.pendingFormInit = nil
+	cmd := m.fs.pendingFormInit
+	m.fs.pendingFormInit = nil
 	return cmd
 }
 
@@ -2419,6 +2339,15 @@ func (m *Model) overlayContentWidth() int {
 		w = 30
 	}
 	return w
+}
+
+// overlayMaxHeight returns the clamped maximum height for overlay boxes.
+func (m *Model) overlayMaxHeight() int {
+	h := m.effectiveHeight() - 4
+	if h < 10 {
+		h = 10
+	}
+	return h
 }
 
 // scrollRule renders a horizontal rule with an embedded Vim-style scroll
@@ -2460,8 +2389,50 @@ func (m *Model) hasActiveOverlay() bool {
 		m.calendar != nil ||
 		m.notePreview != nil ||
 		m.columnFinder != nil ||
-		(m.extraction != nil && m.extraction.Visible) ||
+		(m.ex.extraction != nil && m.ex.extraction.Visible) ||
 		m.helpViewport != nil
+}
+
+func (m *Model) dispatchOverlay(msg tea.Msg) (tea.Cmd, bool) {
+	var handler func(tea.KeyMsg) tea.Cmd
+	switch {
+	case m.helpViewport != nil:
+		handler = m.helpOverlayKey
+	case m.ex.extraction != nil && m.ex.extraction.Visible:
+		handler = m.handleExtractionKey
+	case m.chat != nil && m.chat.Visible:
+		handler = m.handleChatKey
+	case m.notePreview != nil:
+		handler = func(tea.KeyMsg) tea.Cmd { m.notePreview = nil; return nil }
+	case m.calendar != nil:
+		handler = m.handleCalendarKey
+	case m.columnFinder != nil:
+		handler = m.handleColumnFinderKey
+	case m.inlineInput != nil:
+		handler = m.handleInlineInputKey
+	default:
+		return nil, false
+	}
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return nil, true
+	}
+	return handler(keyMsg), true
+}
+
+func (m *Model) helpOverlayKey(keyMsg tea.KeyMsg) tea.Cmd {
+	switch {
+	case keyMsg.String() == keyEsc || keyMsg.String() == keyQuestion:
+		m.helpViewport = nil
+	case key.Matches(keyMsg, helpGotoTop):
+		m.helpViewport.GotoTop()
+	case key.Matches(keyMsg, helpGotoBottom):
+		m.helpViewport.GotoBottom()
+	default:
+		vp, _ := m.helpViewport.Update(keyMsg)
+		m.helpViewport = &vp
+	}
+	return nil
 }
 
 func selectRowByID(tab *Tab, id uint) bool {
@@ -2726,7 +2697,7 @@ func (m *Model) launchExternalEditor() tea.Cmd {
 		m.setStatusError("Set $EDITOR or $VISUAL to use an external editor.")
 		return nil
 	}
-	if m.notesFieldPtr == nil {
+	if m.fs.notesFieldPtr == nil {
 		return nil
 	}
 
@@ -2735,7 +2706,7 @@ func (m *Model) launchExternalEditor() tea.Cmd {
 		m.setStatusError(fmt.Sprintf("create temp file: %s", err))
 		return nil
 	}
-	if _, err := f.WriteString(*m.notesFieldPtr); err != nil {
+	if _, err := f.WriteString(*m.fs.notesFieldPtr); err != nil {
 		_ = f.Close()
 		_ = os.Remove(f.Name())
 		m.setStatusError(fmt.Sprintf("write temp file: %s", err))
@@ -2743,15 +2714,15 @@ func (m *Model) launchExternalEditor() tea.Cmd {
 	}
 	_ = f.Close()
 
-	m.pendingEditor = &editorState{
+	m.fs.pendingEditor = &editorState{
 		EditID:   0,
-		FormKind: m.formKind,
-		FormData: m.formData,
-		FieldPtr: m.notesFieldPtr,
+		FormKind: m.fs.formKind,
+		FormData: m.fs.formData,
+		FieldPtr: m.fs.notesFieldPtr,
 		TempFile: f.Name(),
 	}
-	if m.editID != nil {
-		m.pendingEditor.EditID = *m.editID
+	if m.fs.editID != nil {
+		m.fs.pendingEditor.EditID = *m.fs.editID
 	}
 
 	m.exitForm()
@@ -2765,8 +2736,8 @@ func (m *Model) launchExternalEditor() tea.Cmd {
 // handleEditorFinished reads the edited temp file, updates the field pointer,
 // and reopens the textarea so the user can review before saving.
 func (m *Model) handleEditorFinished(msg editorFinishedMsg) tea.Cmd {
-	pe := m.pendingEditor
-	m.pendingEditor = nil
+	pe := m.fs.pendingEditor
+	m.fs.pendingEditor = nil
 	if pe == nil {
 		return nil
 	}
@@ -2798,9 +2769,9 @@ func (m *Model) handleEditorFinished(msg editorFinishedMsg) tea.Cmd {
 func (m *Model) reopenNotesEdit(pe *editorState) {
 	if pe.EditID > 0 {
 		id := pe.EditID
-		m.editID = &id
+		m.fs.editID = &id
 	}
-	m.formData = pe.FormData
+	m.fs.formData = pe.FormData
 	m.openNotesTextarea(pe.FormKind, pe.FieldPtr, pe.FormData)
 }
 

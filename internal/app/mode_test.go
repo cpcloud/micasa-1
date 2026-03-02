@@ -546,7 +546,7 @@ func TestDeleteAutoShowsDeletedAndRestoreWorks(t *testing.T) {
 
 	// Create a vendor (no FK children to block deletion).
 	h := vendorHandler{}
-	m.formData = &vendorFormData{Name: "Test Vendor", Phone: "555-0000"}
+	m.fs.formData = &vendorFormData{Name: "Test Vendor", Phone: "555-0000"}
 	require.NoError(t, h.SubmitForm(m))
 
 	// Switch to vendors tab and reload so the row is visible.

@@ -51,7 +51,7 @@ func selectOptionCount(field huh.Field) int {
 // (1-based). It sends synthetic GotoTop + Down key events to position the
 // cursor without touching private state directly.
 func (m *Model) jumpSelectToOrdinal(n int) {
-	field := m.form.GetFocusedField()
+	field := m.fs.form.GetFocusedField()
 	if field == nil {
 		return
 	}
@@ -75,8 +75,8 @@ func (m *Model) jumpSelectToOrdinal(n int) {
 
 // formUpdate sends a single message to the form and captures the updated form.
 func (m *Model) formUpdate(msg tea.Msg) {
-	updated, _ := m.form.Update(msg)
+	updated, _ := m.fs.form.Update(msg)
 	if form, ok := updated.(*huh.Form); ok {
-		m.form = form
+		m.fs.form = form
 	}
 }

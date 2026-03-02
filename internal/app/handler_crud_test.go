@@ -22,7 +22,7 @@ func TestProjectHandlerLoadDeleteRestoreRoundTrip(t *testing.T) {
 	h := projectHandler{}
 
 	// Create a project via form data.
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Deck Build",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusPlanned,
@@ -61,7 +61,7 @@ func TestProjectHandlerEditRoundTrip(t *testing.T) {
 	h := projectHandler{}
 
 	// Create.
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Paint Fence",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusIdeating,
@@ -72,15 +72,15 @@ func TestProjectHandlerEditRoundTrip(t *testing.T) {
 
 	// Edit via form data.
 	editID := id
-	m.editID = &editID
-	m.formData = &projectFormData{
+	m.fs.editID = &editID
+	m.fs.formData = &projectFormData{
 		Title:         "Paint Fence Red",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusInProgress,
 		Budget:        "500.00",
 	}
 	require.NoError(t, h.SubmitForm(m))
-	m.editID = nil
+	m.fs.editID = nil
 
 	project, err := m.store.GetProject(id)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestProjectHandlerSnapshot(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := projectHandler{}
 
-	m.formData = &projectFormData{
+	m.fs.formData = &projectFormData{
 		Title:         "Roof Repair",
 		ProjectTypeID: m.projectTypes[0].ID,
 		Status:        data.ProjectStatusPlanned,
@@ -216,7 +216,7 @@ func TestApplianceHandlerLoadDeleteRestoreRoundTrip(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := applianceHandler{}
 
-	m.formData = &applianceFormData{Name: "Washer"}
+	m.fs.formData = &applianceFormData{Name: "Washer"}
 	require.NoError(t, h.SubmitForm(m))
 
 	rows, meta, _, err := h.Load(m.store, false)
@@ -237,20 +237,20 @@ func TestApplianceHandlerEditRoundTrip(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := applianceHandler{}
 
-	m.formData = &applianceFormData{Name: "Dryer"}
+	m.fs.formData = &applianceFormData{Name: "Dryer"}
 	require.NoError(t, h.SubmitForm(m))
 	_, meta, _, _ := h.Load(m.store, false)
 	id := meta[0].ID
 
 	editID := id
-	m.editID = &editID
-	m.formData = &applianceFormData{
+	m.fs.editID = &editID
+	m.fs.formData = &applianceFormData{
 		Name:  "Dryer",
 		Brand: "LG",
 		Cost:  "800.00",
 	}
 	require.NoError(t, h.SubmitForm(m))
-	m.editID = nil
+	m.fs.editID = nil
 
 	app, _ := m.store.GetAppliance(id)
 	assert.Equal(t, "LG", app.Brand)
@@ -267,7 +267,7 @@ func TestMaintenanceHandlerLoadDeleteRestoreRoundTrip(t *testing.T) {
 	h := maintenanceHandler{}
 	cats, _ := m.store.MaintenanceCategories()
 
-	m.formData = &maintenanceFormData{
+	m.fs.formData = &maintenanceFormData{
 		Name:           "Change Air Filter",
 		CategoryID:     cats[0].ID,
 		IntervalMonths: "3",
@@ -296,7 +296,7 @@ func TestVendorHandlerLoadAndSubmit(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := vendorHandler{}
 
-	m.formData = &vendorFormData{
+	m.fs.formData = &vendorFormData{
 		Name:  "Bob's Plumbing",
 		Phone: "555-1234",
 	}
@@ -308,14 +308,14 @@ func TestVendorHandlerLoadAndSubmit(t *testing.T) {
 
 	// Edit vendor.
 	editID := meta[0].ID
-	m.editID = &editID
-	m.formData = &vendorFormData{
+	m.fs.editID = &editID
+	m.fs.formData = &vendorFormData{
 		Name:  "Bob's Plumbing",
 		Phone: "555-5678",
 		Email: "bob@plumbing.com",
 	}
 	require.NoError(t, h.SubmitForm(m))
-	m.editID = nil
+	m.fs.editID = nil
 
 	vendor, _ := m.store.GetVendor(editID)
 	assert.Equal(t, "555-5678", vendor.Phone)
@@ -343,7 +343,7 @@ func TestQuoteHandlerRoundTrip(t *testing.T) {
 	projects, _ := m.store.ListProjects(false)
 	projID := projects[0].ID
 
-	m.formData = &quoteFormData{
+	m.fs.formData = &quoteFormData{
 		ProjectID:  projID,
 		VendorName: "Acme Contractors",
 		Total:      "1,500.00",
@@ -378,7 +378,7 @@ func TestQuoteHandlerSnapshot(t *testing.T) {
 	}))
 	projects, _ := m.store.ListProjects(false)
 
-	m.formData = &quoteFormData{
+	m.fs.formData = &quoteFormData{
 		ProjectID:  projects[0].ID,
 		VendorName: "QuoteCo",
 		Total:      "200.00",
@@ -410,7 +410,7 @@ func TestServiceLogHandlerRoundTrip(t *testing.T) {
 
 	h := serviceLogHandler{maintenanceItemID: maintID}
 
-	m.formData = &serviceLogFormData{
+	m.fs.formData = &serviceLogFormData{
 		MaintenanceItemID: maintID,
 		ServicedAt:        "2026-01-15",
 		Cost:              "75.00",
@@ -447,7 +447,7 @@ func TestServiceLogHandlerSnapshot(t *testing.T) {
 
 	h := serviceLogHandler{maintenanceItemID: maintID}
 
-	m.formData = &serviceLogFormData{
+	m.fs.formData = &serviceLogFormData{
 		MaintenanceItemID: maintID,
 		ServicedAt:        "2026-01-20",
 	}
@@ -559,7 +559,7 @@ func TestVendorJobsInlineEditNotesOpensTextarea(t *testing.T) {
 	require.NoError(t, h.InlineEdit(m, meta[0].ID, int(vendorJobsColNotes)))
 	assert.Nil(t, m.inlineInput, "Notes should not use inline input")
 	assert.Equal(t, modeForm, m.mode, "Notes should open in form mode")
-	assert.True(t, m.notesEditMode, "notesEditMode should be set")
+	assert.True(t, m.fs.notesEditMode, "notesEditMode should be set")
 }
 
 func TestVendorJobsInlineEditItemShowsStatusMessage(t *testing.T) {
@@ -603,7 +603,7 @@ func TestIncidentHandlerLoadDeleteRestoreRoundTrip(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := incidentHandler{}
 
-	m.formData = &incidentFormData{
+	m.fs.formData = &incidentFormData{
 		Title:       "Broken window",
 		Status:      data.IncidentStatusOpen,
 		Severity:    data.IncidentSeverityUrgent,
@@ -639,7 +639,7 @@ func TestIncidentHandlerEditRoundTrip(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := incidentHandler{}
 
-	m.formData = &incidentFormData{
+	m.fs.formData = &incidentFormData{
 		Title:       "Water stain",
 		Status:      data.IncidentStatusOpen,
 		Severity:    data.IncidentSeveritySoon,
@@ -650,8 +650,8 @@ func TestIncidentHandlerEditRoundTrip(t *testing.T) {
 	id := meta[0].ID
 
 	editID := id
-	m.editID = &editID
-	m.formData = &incidentFormData{
+	m.fs.editID = &editID
+	m.fs.formData = &incidentFormData{
 		Title:       "Water stain on ceiling",
 		Status:      data.IncidentStatusInProgress,
 		Severity:    data.IncidentSeverityUrgent,
@@ -659,7 +659,7 @@ func TestIncidentHandlerEditRoundTrip(t *testing.T) {
 		Cost:        "250.00",
 	}
 	require.NoError(t, h.SubmitForm(m))
-	m.editID = nil
+	m.fs.editID = nil
 
 	inc, err := m.store.GetIncident(id)
 	require.NoError(t, err)
@@ -673,7 +673,7 @@ func TestIncidentHandlerSnapshot(t *testing.T) {
 	m := newTestModelWithStore(t)
 	h := incidentHandler{}
 
-	m.formData = &incidentFormData{
+	m.fs.formData = &incidentFormData{
 		Title:       "Cracked tile",
 		Status:      data.IncidentStatusOpen,
 		Severity:    data.IncidentSeverityWhenever,
@@ -795,22 +795,22 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 	t.Run("project", func(t *testing.T) {
 		m := newTestModelWithStore(t)
-		m.formKind = formProject
-		m.formData = &projectFormData{
+		m.fs.formKind = formProject
+		m.fs.formData = &projectFormData{
 			Title:         "Deck Build",
 			ProjectTypeID: m.projectTypes[0].ID,
 			Status:        data.ProjectStatusPlanned,
 		}
 
-		require.Nil(t, m.editID)
+		require.Nil(t, m.fs.editID)
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "first save")
-		require.NotNil(t, m.editID, "editID should be set after create")
-		firstID := *m.editID
+		require.NotNil(t, m.fs.editID, "editID should be set after create")
+		firstID := *m.fs.editID
 
 		// Modify form data so the second save proves update, not a
 		// blocked duplicate create.
-		m.formData = &projectFormData{
+		m.fs.formData = &projectFormData{
 			Title:         "Deck Build v2",
 			ProjectTypeID: m.projectTypes[0].ID,
 			Status:        data.ProjectStatusInProgress,
@@ -818,7 +818,7 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 		m.status = statusMsg{}
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "second save")
-		assert.Equal(t, firstID, *m.editID, "editID must not change on update")
+		assert.Equal(t, firstID, *m.fs.editID, "editID must not change on update")
 
 		projects, err := m.store.ListProjects(false)
 		require.NoError(t, err)
@@ -828,17 +828,17 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 	t.Run("vendor", func(t *testing.T) {
 		m := newTestModelWithStore(t)
-		m.formKind = formVendor
-		m.formData = &vendorFormData{Name: "Test Plumber", Phone: "555-0001"}
+		m.fs.formKind = formVendor
+		m.fs.formData = &vendorFormData{Name: "Test Plumber", Phone: "555-0001"}
 
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "first save")
-		require.NotNil(t, m.editID)
+		require.NotNil(t, m.fs.editID)
 
 		// Change phone — without the fix the old code would try to
 		// create a second vendor with the same name and hit a unique
 		// constraint error instead of updating.
-		m.formData = &vendorFormData{Name: "Test Plumber", Phone: "555-0002"}
+		m.fs.formData = &vendorFormData{Name: "Test Plumber", Phone: "555-0002"}
 		m.status = statusMsg{}
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "second save")
@@ -851,14 +851,14 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 	t.Run("appliance", func(t *testing.T) {
 		m := newTestModelWithStore(t)
-		m.formKind = formAppliance
-		m.formData = &applianceFormData{Name: "Dishwasher"}
+		m.fs.formKind = formAppliance
+		m.fs.formData = &applianceFormData{Name: "Dishwasher"}
 
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "first save")
-		require.NotNil(t, m.editID)
+		require.NotNil(t, m.fs.editID)
 
-		m.formData = &applianceFormData{Name: "Dishwasher", Brand: "Bosch"}
+		m.fs.formData = &applianceFormData{Name: "Dishwasher", Brand: "Bosch"}
 		m.status = statusMsg{}
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "second save")
@@ -872,8 +872,8 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 	t.Run("maintenance", func(t *testing.T) {
 		m := newTestModelWithStore(t)
 		cats, _ := m.store.MaintenanceCategories()
-		m.formKind = formMaintenance
-		m.formData = &maintenanceFormData{
+		m.fs.formKind = formMaintenance
+		m.fs.formData = &maintenanceFormData{
 			Name:         "Change Filter",
 			CategoryID:   cats[0].ID,
 			ScheduleType: schedNone,
@@ -881,9 +881,9 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "first save")
-		require.NotNil(t, m.editID)
+		require.NotNil(t, m.fs.editID)
 
-		m.formData = &maintenanceFormData{
+		m.fs.formData = &maintenanceFormData{
 			Name:           "Change Filter",
 			CategoryID:     cats[0].ID,
 			ScheduleType:   schedInterval,
@@ -909,8 +909,8 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 		}))
 		projects, _ := m.store.ListProjects(false)
 
-		m.formKind = formQuote
-		m.formData = &quoteFormData{
+		m.fs.formKind = formQuote
+		m.fs.formData = &quoteFormData{
 			ProjectID:  projects[0].ID,
 			VendorName: "QuoteCo",
 			Total:      "500.00",
@@ -918,9 +918,9 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "first save")
-		require.NotNil(t, m.editID)
+		require.NotNil(t, m.fs.editID)
 
-		m.formData = &quoteFormData{
+		m.fs.formData = &quoteFormData{
 			ProjectID:  projects[0].ID,
 			VendorName: "QuoteCo",
 			Total:      "750.00",
@@ -949,17 +949,17 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 		// wiring detailStack.
 		require.NoError(t, m.openServiceLogDetail(maintID, "HVAC Filter"))
 
-		m.formKind = formServiceLog
-		m.formData = &serviceLogFormData{
+		m.fs.formKind = formServiceLog
+		m.fs.formData = &serviceLogFormData{
 			MaintenanceItemID: maintID,
 			ServicedAt:        "2026-01-15",
 		}
 
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "first save")
-		require.NotNil(t, m.editID)
+		require.NotNil(t, m.fs.editID)
 
-		m.formData = &serviceLogFormData{
+		m.fs.formData = &serviceLogFormData{
 			MaintenanceItemID: maintID,
 			ServicedAt:        "2026-01-15",
 			Notes:             "replaced filter",
@@ -976,17 +976,17 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 	t.Run("document", func(t *testing.T) {
 		m := newTestModelWithStore(t)
-		m.formKind = formDocument
-		m.formData = &documentFormData{
+		m.fs.formKind = formDocument
+		m.fs.formData = &documentFormData{
 			Title:     "Test Doc",
 			EntityRef: entityRef{Kind: data.DocumentEntityProject},
 		}
 
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "first save")
-		require.NotNil(t, m.editID)
+		require.NotNil(t, m.fs.editID)
 
-		m.formData = &documentFormData{
+		m.fs.formData = &documentFormData{
 			Title:     "Test Doc (revised)",
 			EntityRef: entityRef{Kind: data.DocumentEntityProject},
 		}
@@ -1014,17 +1014,17 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 		// Use the real project-document detail view.
 		require.NoError(t, m.openProjectDocumentDetail(projID, "Scoped Doc Proj"))
 
-		m.formKind = formDocument
-		m.formData = &documentFormData{
+		m.fs.formKind = formDocument
+		m.fs.formData = &documentFormData{
 			Title:     "Permit",
 			EntityRef: entityRef{Kind: data.DocumentEntityProject},
 		}
 
 		m.saveFormInPlace()
 		requireNoStatusError(t, m, "first save")
-		require.NotNil(t, m.editID)
+		require.NotNil(t, m.fs.editID)
 
-		m.formData = &documentFormData{
+		m.fs.formData = &documentFormData{
 			Title:     "Permit (final)",
 			EntityRef: entityRef{Kind: data.DocumentEntityProject},
 		}
