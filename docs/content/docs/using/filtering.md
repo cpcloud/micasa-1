@@ -7,7 +7,7 @@ linkTitle = "Row Filtering"
 
 micasa lets you filter table rows by pinning cell values, then activating to hide non-matching rows.
 
-![Filtering demo showing pin, preview, activate, and clear](/images/using-filtering.webp)
+<video src="/videos/using-filtering.webm" class="demo-video" autoplay loop muted playsinline></video>
 
 ## Quick start
 

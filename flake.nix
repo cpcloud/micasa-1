@@ -293,9 +293,9 @@
               pkgs.pagefind
             ];
             text = ''
-              mkdir -p docs/static/images
+              mkdir -p docs/static/images docs/static/videos
               cp images/favicon.svg docs/static/images/favicon.svg
-              cp images/demo.webp docs/static/images/demo.webp
+              cp videos/demo.webm docs/static/videos/demo.webm
               rm -rf website
               hugo --source docs --destination ../website --minify
               pagefind --site website --quiet
@@ -308,9 +308,9 @@
               pkgs.pagefind
             ];
             text = ''
-              mkdir -p docs/static/images
+              mkdir -p docs/static/images docs/static/videos
               cp images/favicon.svg docs/static/images/favicon.svg
-              cp images/demo.webp docs/static/images/demo.webp
+              cp videos/demo.webm docs/static/videos/demo.webm
 
               # Build once to generate the pagefind index, then copy it
               # into docs/static/ so hugo server serves it as a static asset.
@@ -326,14 +326,13 @@
               exec hugo server --source docs --buildDrafts --disableFastRender --noHTTPCache --port "$_port" --bind 0.0.0.0 &>/dev/null
             '';
           };
-          # Records any VHS tape and converts the GIF output to WebP
+          # Records any VHS tape to WebM
           record-tape = pkgs.writeShellApplication {
             name = "record-tape";
             runtimeInputs = [
               micasa
               pkgs.vhs
               pkgs.nerd-fonts.hack
-              pkgs.libwebp
             ];
             runtimeEnv = {
               FONTCONFIG_FILE = "${vhsFontsConf}";
@@ -346,25 +345,25 @@
 
               tape="$1"
 
-              gif_path=$(grep -m1 '^Output ' "$tape" | awk '{print $2}')
-              if [[ -z "$gif_path" || "$gif_path" != *.gif ]]; then
-                echo "error: tape must contain an Output directive ending in .gif" >&2
+              webm_path=$(grep -m1 '^Output ' "$tape" | awk '{print $2}')
+              if [[ -z "$webm_path" || "$webm_path" != *.webm ]]; then
+                echo "error: tape must contain an Output directive ending in .webm" >&2
                 exit 1
               fi
 
-              webp_path="''${gif_path%.gif}.webp"
-
-              mkdir -p "$(dirname "$gif_path")"
+              mkdir -p "$(dirname "$webm_path")"
               vhs "$tape"
-              gif2webp -m 6 "$gif_path" -o "$webp_path"
-              rm "$gif_path"
             '';
           };
           record-demo = pkgs.writeShellApplication {
             name = "record-demo";
-            runtimeInputs = [ self.packages.${system}.record-tape ];
+            runtimeInputs = [
+              self.packages.${system}.record-tape
+              pkgs.ffmpeg-headless
+            ];
             text = ''
               record-tape docs/tapes/demo.tape
+              ffmpeg -y -i videos/demo.webm -c:v libwebp_anim -compression_level 6 -loop 0 images/demo.webp
             '';
           };
           # Captures a single VHS tape to a WebP screenshot: capture-one <tape-file>
@@ -374,7 +373,7 @@
               micasa
               pkgs.vhs
               pkgs.nerd-fonts.hack
-              pkgs.imagemagick
+              pkgs.ffmpeg-headless
             ];
             runtimeEnv = {
               FONTCONFIG_FILE = "${vhsFontsConf}";
@@ -390,16 +389,11 @@
               OUT="docs/static/images"
               mkdir -p "$OUT"
 
-              tmpdir=$(mktemp -d)
-              trap 'rm -rf "$tmpdir"' EXIT
-
               vhs "$tape"
 
-              # Extract last frame from GIF as lossless WebP
-              magick "$OUT/$name.gif" -coalesce "$tmpdir/frame-%04d.png"
-              last=$(printf '%s\n' "$tmpdir/frame"-*.png | sort -t- -k2 -n | tail -1)
-              magick "$last" -quality 100 -define webp:lossless=true "$OUT/$name.webp"
-              rm -f "$OUT/$name.gif"
+              # Extract last frame from WebM as lossless WebP
+              ffmpeg -y -sseof -0.04 -i "$OUT/$name.webm" -frames:v 1 -c:v libwebp -lossless 1 "$OUT/$name.webp"
+              rm -f "$OUT/$name.webm"
 
               echo "$name -> $OUT/$name.webp"
             '';
@@ -411,44 +405,34 @@
             runtimeInputs = [
               self.packages.${system}.capture-one
               pkgs.fd
-              pkgs.parallel
             ];
             text = ''
               TAPES="docs/tapes"
 
               if [[ $# -gt 0 ]]; then
-                # Named tapes in parallel
-                printf '%s\n' "$@" | parallel --bar capture-one "$TAPES/{}.tape"
+                for name in "$@"; do
+                  capture-one "$TAPES/$name.tape" &
+                done
+                wait
                 exit
               fi
 
-              # All tapes in parallel (skip demo and using-* animated tapes)
-              ntapes=$(fd -e tape --exclude demo.tape --exclude 'using-*.tape' . "$TAPES" | wc -l)
-              nprocs=$(nproc)
-              jobs=$(( ntapes < nprocs ? ntapes : nprocs ))
-              fd -e tape --exclude demo.tape --exclude 'using-*.tape' -0 . "$TAPES" \
-                | parallel -0 -j"$jobs" --bar capture-one {}
+              # All tapes in parallel (skip demo, using-*, and extraction animated tapes)
+              fd -e tape --exclude demo.tape --exclude 'using-*.tape' --exclude extraction.tape . "$TAPES" \
+                -x capture-one {}
             '';
           };
-          # Records all animated demo tapes (using-*) in parallel
+          # Records all animated demo tapes (using-*, extraction) in parallel
           record-animated = pkgs.writeShellApplication {
             name = "record-animated";
             runtimeInputs = [
               self.packages.${system}.record-tape
               pkgs.fd
-              pkgs.parallel
             ];
             text = ''
               TAPES="docs/tapes"
-              ntapes=$(fd -g 'using-*.tape' . "$TAPES" | wc -l)
-              if [[ "$ntapes" -eq 0 ]]; then
-                echo "no using-*.tape files found in $TAPES" >&2
-                exit 1
-              fi
-              nprocs=$(nproc)
-              jobs=$(( ntapes < nprocs ? ntapes : nprocs ))
-              fd -g 'using-*.tape' -0 . "$TAPES" \
-                | parallel -0 -j"$jobs" --bar record-tape {}
+              fd -g '{using-*,extraction}.tape' . "$TAPES" \
+                -x record-tape {}
             '';
           };
           gen-sample-pdf = pkgs.writeShellApplication {
@@ -537,7 +521,7 @@
           {
             default = app micasa "Terminal UI for home maintenance";
             site = app (pkg "site") "Start local Hugo dev server";
-            record-tape = app (pkg "record-tape") "Record a VHS tape to WebP";
+            record-tape = app (pkg "record-tape") "Record a VHS tape to WebM";
             record-demo = app (pkg "record-demo") "Record the main demo tape";
             capture-one = app (pkg "capture-one") "Capture a VHS tape screenshot";
             capture-screenshots = app (pkg "capture-screenshots") "Capture all VHS screenshots in parallel";

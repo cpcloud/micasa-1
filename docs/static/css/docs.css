@@ -708,7 +708,8 @@ h2:hover .badge-experimental .badge-label {
 
 /* ── Screenshots ───────────────────────────────────────────── */
 
-.docs-main img {
+.docs-main img,
+.docs-main video {
   max-width: 100%;
   height: auto;
   border-radius: 8px;

@@ -227,7 +227,8 @@ body {
   font-weight: 600;
 }
 
-.blog-post-body img {
+.blog-post-body img,
+.blog-post-body video {
   max-width: 100%;
   height: auto;
   border-radius: 8px;

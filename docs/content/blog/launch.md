@@ -50,7 +50,7 @@ them.
 projects, incidents, vendor quotes, appliances, warranties, service history,
 and file attachments.
 
-![micasa demo](/images/demo.webp)
+<video src="/videos/demo.webm" class="demo-video" autoplay loop muted playsinline></video>
 
 The interface is modal, vim-style. If you don't like vim, then you probably
 won't like micasa. Emacs keybindings are not on the near-term feature list.
