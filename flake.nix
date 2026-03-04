@@ -131,6 +131,38 @@
               language = "system";
               pass_filenames = true;
             };
+            go-mod-tidy = {
+              enable = true;
+              name = "go-mod-tidy";
+              entry = "${goModTidyCheck}/bin/go-mod-tidy-check";
+              files = "\\.go$|^go\\.(mod|sum)$";
+              language = "system";
+              pass_filenames = false;
+            };
+            deadcode-check = {
+              enable = true;
+              name = "deadcode";
+              entry = "${run-deadcode}/bin/run-deadcode";
+              files = "\\.go$";
+              language = "system";
+              pass_filenames = false;
+            };
+            osv-scanner = {
+              enable = true;
+              name = "osv-scanner";
+              entry = "${run-osv-scanner}/bin/run-osv-scanner";
+              files = "^go\\.(mod|sum)$";
+              language = "system";
+              pass_filenames = false;
+            };
+            vendor-hash-check = {
+              enable = true;
+              name = "vendor-hash-check";
+              entry = "${vendorHashCheck}/bin/vendor-hash-check";
+              files = "^go\\.(mod|sum)$";
+              language = "system";
+              pass_filenames = false;
+            };
           };
         };
 
@@ -154,6 +186,58 @@
           subPackages = [ "cmd/deadcode" ];
           vendorHash = "sha256-oYmM+5lNmlP2i78NsG3v4WRhAUbiwS+EFkiicI6MKXA=";
           doCheck = false;
+        };
+
+        run-deadcode = pkgs.writeShellApplication {
+          name = "run-deadcode";
+          runtimeInputs = [
+            deadcode
+            pkgs.go
+          ];
+          runtimeEnv.CGO_ENABLED = "0";
+          text = ''
+            export GOCACHE="''${GOCACHE:-$(mktemp -d)}"
+            export GOMODCACHE="''${GOMODCACHE:-$(mktemp -d)}"
+            deadcode -test ./...
+          '';
+        };
+
+        run-osv-scanner = pkgs.writeShellApplication {
+          name = "run-osv-scanner";
+          runtimeInputs = [ pkgs.osv-scanner ];
+          text = ''
+            osv-scanner scan --config osv-scanner.toml --no-ignore --recursive .
+          '';
+        };
+
+        goModTidyCheck = pkgs.writeShellApplication {
+          name = "go-mod-tidy-check";
+          runtimeInputs = [
+            pkgs.go
+            pkgs.git
+          ];
+          text = ''
+            go mod tidy
+            git diff --exit-code go.mod go.sum || {
+              echo "go mod tidy modified go.mod/go.sum -- please re-stage" >&2
+              exit 1
+            }
+          '';
+        };
+
+        vendorHashCheck = pkgs.writeShellApplication {
+          name = "vendor-hash-check";
+          runtimeInputs = [ pkgs.git ];
+          text = ''
+            if git diff --cached --quiet -- go.sum; then
+              exit 0
+            fi
+            if ! git diff --cached --quiet -- flake.nix; then
+              exit 0
+            fi
+            echo "go.sum changed but flake.nix is unchanged -- run /update-vendor-hash to update vendorHash" >&2
+            exit 1
+          '';
         };
 
       in
@@ -418,26 +502,7 @@
               gen-mixed-pdf
             '';
           };
-          run-deadcode = pkgs.writeShellApplication {
-            name = "run-deadcode";
-            runtimeInputs = [
-              deadcode
-              pkgs.go
-            ];
-            runtimeEnv.CGO_ENABLED = "0";
-            text = ''
-              export GOCACHE="''${GOCACHE:-$(mktemp -d)}"
-              export GOMODCACHE="''${GOMODCACHE:-$(mktemp -d)}"
-              deadcode -test ./...
-            '';
-          };
-          run-osv-scanner = pkgs.writeShellApplication {
-            name = "run-osv-scanner";
-            runtimeInputs = [ pkgs.osv-scanner ];
-            text = ''
-              osv-scanner scan --config osv-scanner.toml --no-ignore --recursive .
-            '';
-          };
+          inherit run-deadcode run-osv-scanner;
           run-pre-commit = pkgs.writeShellApplication {
             name = "run-pre-commit";
             runtimeInputs = [
