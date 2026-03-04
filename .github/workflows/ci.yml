@@ -50,8 +50,23 @@ jobs:
         if: runner.os == 'Linux'
         run: command -v magick || sudo ln -s "$(command -v convert)" /usr/local/bin/magick
 
+      - name: Cache Homebrew packages (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/Library/Caches/Homebrew/downloads
+            /opt/homebrew/Cellar
+            /opt/homebrew/opt
+            /usr/local/Cellar
+            /usr/local/opt
+          key: brew-${{ runner.os }}-${{ runner.arch }}-poppler-tesseract-imagemagick-full-ghostscript
+
       - name: Install extraction tools (macOS)
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: brew install poppler tesseract imagemagick-full ghostscript
 
       - name: Add imagemagick-full to PATH (macOS)
