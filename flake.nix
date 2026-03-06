@@ -212,8 +212,10 @@
           ];
           runtimeEnv.CGO_ENABLED = "0";
           text = ''
-            export GOCACHE="''${GOCACHE:-$(mktemp -d)}"
-            export GOMODCACHE="''${GOMODCACHE:-$(mktemp -d)}"
+            _tmpdir=$(mktemp -d -t micasa-deadcode-XXXXXX)
+            trap 'chmod -R u+w "$_tmpdir" 2>/dev/null; rm -rf "$_tmpdir"' EXIT
+            export GOCACHE="''${GOCACHE:-$_tmpdir/gocache}"
+            export GOMODCACHE="''${GOMODCACHE:-$_tmpdir/gomodcache}"
             deadcode -test ./...
           '';
         };
@@ -228,8 +230,10 @@
           ];
           runtimeEnv.CGO_ENABLED = "0";
           text = ''
-            export GOCACHE="''${GOCACHE:-$(mktemp -d)}"
-            export GOMODCACHE="''${GOMODCACHE:-$(mktemp -d)}"
+            _tmpdir=$(mktemp -d -t micasa-govulncheck-XXXXXX)
+            trap 'chmod -R u+w "$_tmpdir" 2>/dev/null; rm -rf "$_tmpdir"' EXIT
+            export GOCACHE="''${GOCACHE:-$_tmpdir/gocache}"
+            export GOMODCACHE="''${GOMODCACHE:-$_tmpdir/gomodcache}"
 
             exclude_file=".govulncheck-exclude"
             raw=$(govulncheck -format json ./... 2>&1) || true
@@ -287,8 +291,10 @@
           ];
           runtimeEnv.CGO_ENABLED = "0";
           text = ''
-            export GOCACHE="''${GOCACHE:-$(mktemp -d)}"
-            export GOMODCACHE="''${GOMODCACHE:-$(mktemp -d)}"
+            _tmpdir=$(mktemp -d -t micasa-gogenerate-XXXXXX)
+            trap 'chmod -R u+w "$_tmpdir" 2>/dev/null; rm -rf "$_tmpdir"' EXIT
+            export GOCACHE="''${GOCACHE:-$_tmpdir/gocache}"
+            export GOMODCACHE="''${GOMODCACHE:-$_tmpdir/gomodcache}"
             go generate ./internal/data/
             git diff --exit-code internal/data/meta_generated.go || {
               echo "go generate produced changes -- please re-stage internal/data/meta_generated.go" >&2
