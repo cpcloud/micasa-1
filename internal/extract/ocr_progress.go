@@ -20,15 +20,16 @@ type AcquireToolState struct {
 
 // ExtractProgress reports incremental progress from ExtractWithProgress.
 type ExtractProgress struct {
-	Tool  string // extractor tool name (set on Done)
-	Desc  string // human description (set on Done)
-	Phase string // e.g. "extract"
-	Page  int    // current page (1-indexed)
-	Total int    // total pages (0 until known)
-	Done  bool   // all phases finished
-	Text  string // accumulated text (set on Done)
-	Data  []byte // structured data (set on Done)
-	Err   error  // set on failure
+	Tool     string // extractor tool name (set on Done)
+	Desc     string // human description (set on Done)
+	Phase    string // e.g. "extract"
+	Page     int    // current page (1-indexed)
+	Total    int    // total pages (0 until known)
+	DocPages int    // total pages in the PDF (0 when uncapped)
+	Done     bool   // all phases finished
+	Text     string // accumulated text (set on Done)
+	Data     []byte // structured data (set on Done)
+	Err      error  // set on failure
 
 	// AcquireTools carries per-tool state during the rasterization+OCR
 	// phase. Non-nil while pages are being processed.
@@ -109,10 +110,6 @@ func ocrPDFWithProgress(
 		ch <- ExtractProgress{Done: true}
 		return
 	}
-	if maxPages <= 0 {
-		maxPages = DefaultMaxExtractPages
-	}
-
 	tmpDir, err := os.MkdirTemp("", "micasa-ocr-*")
 	if err != nil {
 		ch <- ExtractProgress{Err: fmt.Errorf("create temp dir: %w", err), Done: true}
@@ -135,48 +132,81 @@ func ocrPDFWithProgress(
 		}
 		return
 	}
+
+	// Track total document pages when a cap is active.
+	docPages := pageCount
 	if maxPages > 0 && pageCount > maxPages {
 		pageCount = maxPages
+	}
+	// Only surface docPages when the cap actually trimmed something.
+	if pageCount == docPages {
+		docPages = 0
 	}
 	if pageCount == 0 {
 		ch <- ExtractProgress{Done: true}
 		return
 	}
 
-	// Send initial tool state.
-	toolState := &AcquireToolState{Tool: "pdftocairo", Running: true}
+	// Send initial pipeline state: both stages running.
+	cairoState := &AcquireToolState{Tool: "pdftocairo", Running: true}
+	tessState := &AcquireToolState{Tool: "tesseract", Running: true}
+	snapshot := func() []AcquireToolState {
+		return []AcquireToolState{*cairoState, *tessState}
+	}
 	select {
-	case ch <- ExtractProgress{AcquireTools: []AcquireToolState{*toolState}}:
+	case ch <- ExtractProgress{AcquireTools: snapshot()}:
 	case <-ctx.Done():
 		ch <- ExtractProgress{Err: ctx.Err(), Done: true}
 		return
 	}
 
-	// Run fused pdftocairo+tesseract pipeline with per-page progress.
+	// Run fused pdftocairo|tesseract pipeline with per-stage progress.
 	total := pageCount
+	rasterDone := make(chan struct{}, total)
 	pageDone := make(chan struct{}, total)
 	var ocrResults []ocrPageResult
 	done := make(chan struct{})
 	go func() {
-		ocrResults = ocrPDFPages(ctx, pdfPath, total, pageDone)
+		ocrResults = ocrPDFPages(ctx, pdfPath, total, rasterDone, pageDone)
 		close(done)
 	}()
 
+	rasterized := 0
 	completed := 0
 	for completed < total {
 		select {
-		case <-pageDone:
-			completed++
-			toolState.Count = completed
-			if completed == total {
-				toolState.Running = false
+		case <-rasterDone:
+			rasterized++
+			cairoState.Count = rasterized
+			if rasterized == total {
+				cairoState.Running = false
 			}
 			select {
 			case ch <- ExtractProgress{
 				Phase:        "extract",
 				Page:         completed,
 				Total:        total,
-				AcquireTools: []AcquireToolState{*toolState},
+				DocPages:     docPages,
+				AcquireTools: snapshot(),
+			}:
+			case <-ctx.Done():
+				<-done
+				ch <- ExtractProgress{Err: ctx.Err(), Done: true}
+				return
+			}
+		case <-pageDone:
+			completed++
+			tessState.Count = completed
+			if completed == total {
+				tessState.Running = false
+			}
+			select {
+			case ch <- ExtractProgress{
+				Phase:        "extract",
+				Page:         completed,
+				Total:        total,
+				DocPages:     docPages,
+				AcquireTools: snapshot(),
 			}:
 			case <-ctx.Done():
 				<-done
@@ -189,14 +219,28 @@ func ocrPDFWithProgress(
 			return
 		}
 	}
+	// Drain any remaining rasterDone signals (all pages are OCR'd,
+	// so all rasterizations must have completed too).
+	for rasterized < total {
+		<-rasterDone
+		rasterized++
+	}
 	<-done
+
+	cairoState.Running = false
+	cairoState.Count = total
+	tessState.Running = false
+	tessState.Count = total
 
 	text, tsv := collectOCRResults(ocrResults)
 	ch <- ExtractProgress{
-		Tool: "tesseract",
-		Desc: "Text recognized from rasterized page images.",
-		Done: true,
-		Text: text,
-		Data: tsv,
+		Tool:         "tesseract",
+		Desc:         "Text recognized from rasterized page images.",
+		Done:         true,
+		Total:        total,
+		DocPages:     docPages,
+		Text:         text,
+		Data:         tsv,
+		AcquireTools: snapshot(),
 	}
 }

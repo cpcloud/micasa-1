@@ -50,7 +50,7 @@ func BenchmarkOcrPage(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		result := ocrPage(context.Background(), pdfPath, 1)
+		result := ocrPage(context.Background(), pdfPath, 1, nil)
 		if result.err != nil {
 			b.Fatal(result.err)
 		}

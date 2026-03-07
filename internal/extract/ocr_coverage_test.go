@@ -337,7 +337,7 @@ func TestOcrPage_ValidPDF(t *testing.T) {
 	pdfPath := filepath.Join(tmpDir, "input.pdf")
 	require.NoError(t, os.WriteFile(pdfPath, data, 0o600))
 
-	result := ocrPage(context.Background(), pdfPath, 1)
+	result := ocrPage(context.Background(), pdfPath, 1, nil)
 	require.NoError(t, result.err)
 	assert.NotEmpty(t, result.text)
 	assert.NotEmpty(t, result.tsv)
@@ -353,7 +353,7 @@ func TestOcrPage_InvalidPDF(t *testing.T) {
 	pdfPath := filepath.Join(tmpDir, "corrupt.pdf")
 	require.NoError(t, os.WriteFile(pdfPath, []byte("corrupt data"), 0o600))
 
-	result := ocrPage(context.Background(), pdfPath, 1)
+	result := ocrPage(context.Background(), pdfPath, 1, nil)
 	assert.Error(t, result.err)
 }
 
@@ -375,7 +375,7 @@ func TestOcrPage_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result := ocrPage(ctx, pdfPath, 1)
+	result := ocrPage(ctx, pdfPath, 1, nil)
 	assert.Error(t, result.err)
 }
 
@@ -822,7 +822,7 @@ func TestOcrPDFPages_ValidPDF(t *testing.T) {
 		pageCount = 2
 	}
 
-	results := ocrPDFPages(context.Background(), pdfPath, pageCount, nil)
+	results := ocrPDFPages(context.Background(), pdfPath, pageCount, nil, nil)
 	require.Len(t, results, pageCount)
 
 	for i, r := range results {
@@ -849,7 +849,7 @@ func TestOcrPDFPages_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	results := ocrPDFPages(ctx, pdfPath, 1, nil)
+	results := ocrPDFPages(ctx, pdfPath, 1, nil, nil)
 	require.Len(t, results, 1)
 	assert.Error(t, results[0].err)
 }
@@ -870,7 +870,7 @@ func TestOcrPDFPages_ProgressReporting(t *testing.T) {
 	require.NoError(t, os.WriteFile(pdfPath, data, 0o600))
 
 	pageDone := make(chan struct{}, 2)
-	results := ocrPDFPages(context.Background(), pdfPath, 1, pageDone)
+	results := ocrPDFPages(context.Background(), pdfPath, 1, nil, pageDone)
 	require.Len(t, results, 1)
 	require.NoError(t, results[0].err)
 
@@ -967,7 +967,7 @@ func TestOcrPage_NonExistentPDF(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	result := ocrPage(context.Background(), "/nonexistent/file.pdf", 1)
+	result := ocrPage(context.Background(), "/nonexistent/file.pdf", 1, nil)
 	require.Error(t, result.err)
 	assert.Contains(t, result.err.Error(), "pdftocairo")
 }

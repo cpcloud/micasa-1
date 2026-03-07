@@ -91,7 +91,9 @@ type extractionLogState struct {
 	extractors []extract.Extractor
 
 	// Per-tool image acquisition state (non-nil during acquisition phase).
-	acquireTools []extract.AcquireToolState
+	acquireTools   []extract.AcquireToolState
+	docPages       int // total PDF pages when capped (0 = all pages processed)
+	extractedPages int // pages actually processed
 
 	// Channel references for the waitFor loop pattern.
 	extractCh <-chan extract.ExtractProgress
@@ -111,8 +113,10 @@ type extractionLogState struct {
 	pendingDoc *data.Document      // deferred creation: unpersisted document (magic-add)
 
 	// Cursor and expand/collapse state for exploring output.
-	cursor   int                     // index into activeSteps()
-	expanded map[extractionStep]bool // manual expand/collapse overrides
+	cursor       int                     // index into activeSteps()
+	toolCursor   int                     // -1 = parent header, 0..N-1 = child tool line
+	cursorManual bool                    // true after j/k; disables auto-follow
+	expanded     map[extractionStep]bool // manual expand/collapse overrides
 
 	// Explore mode: read-only table navigation for proposed operations.
 	exploring     bool                // true when in table explore mode
@@ -167,20 +171,15 @@ func (ex *extractionLogState) cursorStep() extractionStep {
 }
 
 // stepDefaultExpanded returns the default expanded state for a step before
-// any user toggle. Running and failed steps auto-expand; LLM stays expanded
-// after Done; ext stays expanded when tool states are present.
+// any user toggle. Running and failed steps auto-expand so the cursor
+// tracks progress. Once done, only the LLM step stays expanded (streaming
+// output); text and ext steps collapse their log content by default.
 func (ex *extractionLogState) stepDefaultExpanded(si extractionStep) bool {
 	info := ex.Steps[si]
 	if info.Status == stepRunning || info.Status == stepFailed {
 		return true
 	}
-	if si == stepLLM && info.Status == stepDone {
-		return true
-	}
-	if si == stepExtract && info.Status == stepDone && len(ex.acquireTools) > 0 {
-		return true
-	}
-	return false
+	return si == stepLLM && info.Status == stepDone
 }
 
 // stepExpanded returns whether a step is currently expanded, accounting
@@ -193,12 +192,17 @@ func (ex *extractionLogState) stepExpanded(si extractionStep) bool {
 }
 
 // advanceCursor moves the cursor to the latest settled (done/failed) step.
+// In manual mode (after user presses j/k) this is a no-op.
 func (ex *extractionLogState) advanceCursor() {
+	if ex.cursorManual {
+		return
+	}
 	active := ex.activeSteps()
 	for i := len(active) - 1; i >= 0; i-- {
 		s := ex.Steps[active[i]].Status
 		if s == stepDone || s == stepFailed {
 			ex.cursor = i
+			ex.toolCursor = -1
 			return
 		}
 	}
@@ -289,6 +293,7 @@ func (m *Model) startExtractionOverlay(
 		hasText:       hasText,
 		hasExtract:    needsExtract,
 		hasLLM:        needsLLM,
+		toolCursor:    -1,
 		expanded:      make(map[extractionStep]bool),
 	}
 	if hasText {
@@ -569,10 +574,13 @@ func (m *Model) handleExtractionProgress(msg extractionProgressMsg) tea.Cmd {
 			ex.acquireTools = p.AcquireTools
 			return waitForExtractProgress(ex.ID, ex.extractCh)
 		}
-		// OCR phase: show page progress (tool states persist for rendering).
+		// OCR phase: page progress is shown in the tool line via
+		// renderPageRatio; detail stays simple for the header.
 		switch p.Phase {
 		case "extract":
 			step.Detail = fmt.Sprintf("page %d/%d", p.Page, p.Total)
+			ex.docPages = p.DocPages
+			ex.extractedPages = p.Total
 		}
 		return waitForExtractProgress(ex.ID, ex.extractCh)
 	}
@@ -583,6 +591,8 @@ func (m *Model) handleExtractionProgress(msg extractionProgressMsg) tea.Cmd {
 	nChars := len(strings.TrimSpace(p.Text))
 	step.Detail = p.Tool
 	step.Metric = fmt.Sprintf("%d chars", nChars)
+	ex.docPages = p.DocPages
+	ex.extractedPages = p.Total
 	ex.advanceCursor()
 
 	// Store output as explorable logs.
@@ -910,6 +920,7 @@ func (m *Model) handleExtractionPipelineKey(msg tea.KeyMsg) tea.Cmd {
 	case keyCtrlC:
 		m.interruptExtraction()
 	case keyJ, keyDown:
+		ex.cursorManual = true
 		overflow := ex.Viewport.TotalLineCount() > ex.Viewport.Height
 		scrollable := !ex.Done || ex.stepExpanded(ex.cursorStep())
 		if overflow && scrollable && !ex.Viewport.AtBottom() {
@@ -917,15 +928,29 @@ func (m *Model) handleExtractionPipelineKey(msg tea.KeyMsg) tea.Cmd {
 			ex.Viewport = vp
 			return cmd
 		}
+		// Navigate within ext parent/child lines before moving to next step.
+		if ex.cursorStep() == stepExtract && len(ex.acquireTools) > 0 {
+			if ex.toolCursor == -1 && ex.stepExpanded(stepExtract) {
+				ex.toolCursor = 0
+				break
+			}
+			if ex.toolCursor >= 0 && ex.toolCursor < len(ex.acquireTools)-1 {
+				ex.toolCursor++
+				break
+			}
+			// On last child or collapsed parent: fall through to next step.
+		}
 		active := ex.activeSteps()
 		for next := ex.cursor + 1; next < len(active); next++ {
 			s := ex.Steps[active[next]].Status
 			if s != stepPending {
 				ex.cursor = next
+				ex.toolCursor = -1
 				break
 			}
 		}
 	case keyK, keyUp:
+		ex.cursorManual = true
 		overflow := ex.Viewport.TotalLineCount() > ex.Viewport.Height
 		scrollable := !ex.Done || ex.stepExpanded(ex.cursorStep())
 		if overflow && scrollable && !ex.Viewport.AtTop() {
@@ -933,11 +958,30 @@ func (m *Model) handleExtractionPipelineKey(msg tea.KeyMsg) tea.Cmd {
 			ex.Viewport = vp
 			return cmd
 		}
+		// Navigate within ext parent/child lines before moving to prev step.
+		if ex.cursorStep() == stepExtract && len(ex.acquireTools) > 0 {
+			if ex.toolCursor > 0 {
+				ex.toolCursor--
+				break
+			}
+			if ex.toolCursor == 0 {
+				ex.toolCursor = -1
+				break
+			}
+			// toolCursor == -1: fall through to prev step.
+		}
 		active := ex.activeSteps()
 		for prev := ex.cursor - 1; prev >= 0; prev-- {
 			s := ex.Steps[active[prev]].Status
 			if s != stepPending {
 				ex.cursor = prev
+				// Landing on ext from below: last child if expanded, else parent.
+				if active[prev] == stepExtract && len(ex.acquireTools) > 0 &&
+					ex.stepExpanded(stepExtract) {
+					ex.toolCursor = len(ex.acquireTools) - 1
+				} else {
+					ex.toolCursor = -1
+				}
 				break
 			}
 		}
@@ -946,6 +990,9 @@ func (m *Model) handleExtractionPipelineKey(msg tea.KeyMsg) tea.Cmd {
 		status := ex.Steps[si].Status
 		if status == stepDone || status == stepFailed {
 			ex.expanded[si] = !ex.stepExpanded(si)
+			if si == stepExtract && len(ex.acquireTools) > 0 {
+				ex.toolCursor = -1
+			}
 		}
 	case keyR:
 		if ex.Done && ex.hasLLM && ex.cursorStep() == stepLLM {
@@ -1233,7 +1280,13 @@ func (m *Model) buildExtractionPipelineOverlay(
 	var maxDetailW, maxMetricW, maxElapsedW int
 	for _, si := range active {
 		info := ex.Steps[si]
-		if w := len(info.Detail); w > maxDetailW {
+		// When tools are present, the parent shows "ocr" as detail;
+		// child tool names use their own sub-column width.
+		if si == stepExtract && len(ex.acquireTools) > 0 {
+			if w := len("ocr"); w > maxDetailW {
+				maxDetailW = w
+			}
+		} else if w := len(info.Detail); w > maxDetailW {
 			maxDetailW = w
 		}
 		if w := len(info.Metric); w > maxMetricW {
@@ -1265,11 +1318,12 @@ func (m *Model) buildExtractionPipelineOverlay(
 		info := ex.Steps[si]
 		focused := !ex.exploring && i == ex.cursor
 		part := m.renderExtractionStep(si, info, innerW, focused, colWidths)
-		if i > 0 && strings.Contains(stepParts[i-1], "\n") {
-			lineCount++
-		}
 		if i == ex.cursor {
 			cursorLine = lineCount
+			// Offset within ext: parent is line 0, children start at 1.
+			if si == stepExtract && len(ex.acquireTools) > 0 && ex.toolCursor >= 0 {
+				cursorLine += 1 + ex.toolCursor
+			}
 		}
 		lineCount += strings.Count(part, "\n") + 1
 		stepParts = append(stepParts, part)
@@ -1278,9 +1332,6 @@ func (m *Model) buildExtractionPipelineOverlay(
 	for i, part := range stepParts {
 		if i > 0 {
 			stepBuf.WriteByte('\n')
-			if strings.Contains(stepParts[i-1], "\n") {
-				stepBuf.WriteByte('\n')
-			}
 		}
 		stepBuf.WriteString(part)
 	}
@@ -1548,12 +1599,20 @@ func (m *Model) renderExtractionStep(
 
 	// Cursor indicator: show on any non-pending step so the user can
 	// track focus during streaming and inspect completed steps.
+	// Auto-follow mode uses dim triangles; manual mode uses bright ones.
+	// For ext with tools, cursor only shows on parent when toolCursor == -1.
 	cursor := "  "
-	if focused && info.Status != stepPending {
+	showParentCursor := focused && info.Status != stepPending &&
+		(!hasTools || ex.toolCursor == -1)
+	if showParentCursor {
+		cursorStyle := m.styles.ExtPending()
+		if ex.cursorManual {
+			cursorStyle = m.styles.ExtCursor()
+		}
 		if expanded {
-			cursor = m.styles.ExtCursor().Render(symTriDownSm + " ")
+			cursor = cursorStyle.Render(symTriDownSm + " ")
 		} else {
-			cursor = m.styles.ExtCursor().Render(symTriRightSm + " ")
+			cursor = cursorStyle.Render(symTriRightSm + " ")
 		}
 	}
 
@@ -1562,20 +1621,22 @@ func (m *Model) renderExtractionStep(
 	hdr.WriteString(cursor)
 	hdr.WriteString(icon)
 	hdr.WriteString(nameStyle.Render(fmt.Sprintf("%-4s", name)))
-	// Suppress detail in the ext step header only while running (when it
-	// would duplicate the "page X/Y" sub-line). Once done, the detail is
-	// the OCR tool name ("tesseract") which belongs in the header.
-	showDetailInHeader := si != stepExtract || len(ex.acquireTools) == 0 ||
-		info.Status != stepRunning
 	if cols.Detail > 0 {
 		detail := info.Detail
-		if !showDetailInHeader {
-			detail = ""
+		if hasTools {
+			detail = "ocr"
 		}
 		hdr.WriteString("  ")
 		hdr.WriteString(hint.Render(fmt.Sprintf("%-*s", cols.Detail, detail)))
 	}
-	if cols.Metric > 0 {
+	if hasTools {
+		// Parent metric: page ratio from last tool as aggregate progress.
+		lastTool := ex.acquireTools[len(ex.acquireTools)-1]
+		if lastTool.Count > 0 || !lastTool.Running {
+			hdr.WriteString("  ")
+			hdr.WriteString(m.renderPageRatio(lastTool.Count, ex.extractedPages, ex.docPages))
+		}
+	} else if cols.Metric > 0 {
 		hdr.WriteString("  ")
 		hdr.WriteString(hint.Render(fmt.Sprintf("%*s", cols.Metric, info.Metric)))
 	}
@@ -1596,56 +1657,99 @@ func (m *Model) renderExtractionStep(
 	}
 	header := hdr.String()
 
-	// Render per-tool acquisition lines for the ext step. These persist
-	// after the step completes so the user always sees what ran.
-	// When collapsed, just return the header.
-	if hasTools && !expanded {
-		return header
-	}
+	// Render parent + children for the ext step.
+	// Children only show when expanded; logs beneath children.
 	if hasTools {
 		var b strings.Builder
 		b.WriteString(header)
-		pipeIndent := "     " // align pipe under step name
-		pipe := m.styles.TableSeparator().Render(symVLine) + " "
-		for _, ts := range ex.acquireTools {
-			b.WriteByte('\n')
-			b.WriteString(pipeIndent)
-			b.WriteString(pipe)
-			if ts.Running {
-				b.WriteString(ex.Spinner.View())
-				b.WriteString(" ")
-				b.WriteString(m.styles.ExtRunning().Render(
-					fmt.Sprintf("%-10s", ts.Tool),
-				))
-				if ts.Count > 0 {
-					b.WriteString("  ")
-					b.WriteString(hint.Render(fmt.Sprintf("%d images", ts.Count)))
+
+		if expanded {
+			// Compute max tool name width for child column alignment.
+			maxToolW := 0
+			for _, ts := range ex.acquireTools {
+				if w := len(ts.Tool); w > maxToolW {
+					maxToolW = w
 				}
-			} else if ts.Err != nil {
-				b.WriteString(m.styles.ExtFail().Render("xx"))
-				b.WriteString(" ")
-				b.WriteString(m.styles.ExtFailed().Render(
-					fmt.Sprintf("%-10s", ts.Tool),
-				))
-			} else {
-				b.WriteString(m.styles.ExtOk().Render("ok"))
-				b.WriteString(" ")
-				b.WriteString(m.styles.ExtDone().Render(
-					fmt.Sprintf("%-10s", ts.Tool),
-				))
-				b.WriteString("  ")
-				b.WriteString(hint.Render(fmt.Sprintf("%d images", ts.Count)))
+			}
+
+			dim := m.styles.ExtPending()
+			childIndent := "   "
+			for ti, ts := range ex.acquireTools {
+				b.WriteByte('\n')
+				b.WriteString(childIndent)
+
+				// Child cursor triangle (always right-pointing; children
+				// don't individually expand).
+				childCursor := "   "
+				if focused && ti == ex.toolCursor {
+					cursorStyle := m.styles.ExtPending()
+					if ex.cursorManual {
+						cursorStyle = m.styles.ExtCursor()
+					}
+					childCursor = cursorStyle.Render(symTriRightSm) + "  "
+				}
+				b.WriteString(childCursor)
+
+				// Per-tool status icon and style.
+				isTerminal := ti == len(ex.acquireTools)-1
+				var toolIcon string
+				var toolNameStyle lipgloss.Style
+				switch {
+				case ts.Running:
+					toolIcon = ex.Spinner.View() + " "
+					if isTerminal {
+						toolNameStyle = m.styles.ExtRunning()
+					} else {
+						toolIcon = dim.Render(ex.Spinner.View()) + " "
+						toolNameStyle = dim
+					}
+				case ts.Err != nil:
+					if isTerminal {
+						toolIcon = m.styles.ExtFail().Render("xx") + " "
+						toolNameStyle = m.styles.ExtFailed()
+					} else {
+						toolIcon = dim.Render("xx") + " "
+						toolNameStyle = dim
+					}
+				default:
+					if isTerminal {
+						toolIcon = m.styles.ExtOk().Render("ok") + " "
+						toolNameStyle = m.styles.ExtDone()
+					} else {
+						toolIcon = dim.Render("ok") + " "
+						toolNameStyle = dim
+					}
+				}
+
+				b.WriteString(toolIcon)
+				b.WriteString(toolNameStyle.Render(fmt.Sprintf("%-*s", maxToolW, ts.Tool)))
+
+				if ts.Count > 0 || !ts.Running {
+					b.WriteString("  ")
+					if isTerminal {
+						b.WriteString(m.renderPageRatio(ts.Count, ex.extractedPages, ex.docPages))
+					} else {
+						b.WriteString(dim.Render(fmt.Sprintf("%d/%d pp", ts.Count, ts.Count)))
+					}
+				}
+			}
+
+			// Log content beneath children.
+			if len(info.Logs) > 0 {
+				pipeIndent := "      "
+				pipe := m.styles.TableSeparator().Render(symVLine) + " "
+				logW := innerW - len(pipeIndent) - 2
+				raw := strings.Join(info.Logs, "\n")
+				rendered := m.styles.HeaderHint().Render(wordWrap(raw, logW))
+				for _, line := range strings.Split(rendered, "\n") {
+					b.WriteByte('\n')
+					b.WriteString(pipeIndent)
+					b.WriteString(pipe)
+					b.WriteString(line)
+				}
 			}
 		}
-		// Show page progress while OCR is running.
-		if info.Status == stepRunning && info.Detail != "" {
-			b.WriteByte('\n')
-			b.WriteString(pipeIndent)
-			b.WriteString(pipe)
-			b.WriteString(ex.Spinner.View())
-			b.WriteString(" ")
-			b.WriteString(m.styles.ExtRunning().Render(info.Detail))
-		}
+
 		return b.String()
 	}
 
@@ -1682,6 +1786,30 @@ func (m *Model) renderExtractionStep(
 		b.WriteString(line)
 	}
 	return b.String()
+}
+
+// renderPageRatio formats a page progress indicator with differentiated
+// colors: count (bright), limit and total (dim). When docPages is 0 (no
+// cap), shows "count/total pg". When capped, shows "count/limit/total pg".
+func (m *Model) renderPageRatio(count, limit, docPages int) string {
+	sep := m.styles.ExtPending().Render("/")
+	hint := m.styles.HeaderHint()
+	bright := m.styles.ExtDone()
+	dim := m.styles.ExtPending()
+	countStr := bright.Render(fmt.Sprintf("%d", count))
+	if docPages > 0 {
+		return countStr + sep +
+			hint.Render(fmt.Sprintf("%d", limit)) + sep +
+			dim.Render(fmt.Sprintf("%d", docPages)) +
+			dim.Render(" pp")
+	}
+	total := limit
+	if total == 0 {
+		total = count
+	}
+	return countStr + sep +
+		hint.Render(fmt.Sprintf("%d", total)) +
+		dim.Render(" pp")
 }
 
 func stepName(si extractionStep) string {

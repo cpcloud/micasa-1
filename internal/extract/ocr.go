@@ -16,9 +16,9 @@ import (
 	"sync"
 )
 
-// DefaultMaxExtractPages is the default page limit for extraction. Front-loaded info
-// (specs, warranty, maintenance) is typically in the first pages.
-const DefaultMaxExtractPages = 20
+// DefaultMaxExtractPages is the default page limit for extraction.
+// 0 means no limit (all pages are processed).
+const DefaultMaxExtractPages = 0
 
 // ocrPageResult holds the OCR output for a single page.
 type ocrPageResult struct {
@@ -53,7 +53,7 @@ func ocrPDF(ctx context.Context, data []byte, maxPages int) (string, []byte, err
 		return "", nil, nil
 	}
 
-	results := ocrPDFPages(ctx, pdfPath, pageCount, nil)
+	results := ocrPDFPages(ctx, pdfPath, pageCount, nil, nil)
 	text, tsv := collectOCRResults(results)
 	return text, tsv, nil
 }
@@ -87,7 +87,9 @@ func pdfPageCount(ctx context.Context, pdfPath string) (int, error) {
 
 // ocrPage rasterizes a single PDF page with pdftocairo and pipes the PNG
 // directly into tesseract for OCR, with no intermediate file on disk.
-func ocrPage(ctx context.Context, pdfPath string, page int) ocrPageResult {
+// If onRasterDone is non-nil, it is called after pdftocairo finishes
+// (before tesseract completes) to enable per-stage progress reporting.
+func ocrPage(ctx context.Context, pdfPath string, page int, onRasterDone func()) ocrPageResult {
 	// pdftocairo streams the PNG to stdout; tesseract reads from stdin.
 	cairoArgs := []string{
 		"-png",
@@ -143,6 +145,9 @@ func ocrPage(ctx context.Context, pdfPath string, page int) ocrPageResult {
 
 	// Wait for both to finish. Cairo must finish first so the pipe closes.
 	cairoWaitErr := cairoCmd.Wait()
+	if cairoWaitErr == nil && onRasterDone != nil {
+		onRasterDone()
+	}
 	tessWaitErr := tessCmd.Wait()
 
 	if cairoWaitErr != nil {
@@ -165,11 +170,14 @@ func ocrPage(ctx context.Context, pdfPath string, page int) ocrPageResult {
 
 // ocrPDFPages runs fused pdftocairo|tesseract on each page in parallel,
 // capping concurrency at runtime.NumCPU(). Results are returned in page
-// order. If pageDone is non-nil, a value is sent after each page completes.
+// order. If rasterDone is non-nil, a value is sent after each page's
+// pdftocairo finishes. If pageDone is non-nil, a value is sent after each
+// page's tesseract finishes.
 func ocrPDFPages(
 	ctx context.Context,
 	pdfPath string,
 	pageCount int,
+	rasterDone chan<- struct{},
 	pageDone chan<- struct{},
 ) []ocrPageResult {
 	results := make([]ocrPageResult, pageCount)
@@ -195,7 +203,17 @@ func ocrPDFPages(
 				return
 			}
 
-			results[idx] = ocrPage(ctx, pdfPath, idx+1) // 1-indexed pages
+			var onRasterDone func()
+			if rasterDone != nil {
+				onRasterDone = func() {
+					select {
+					case rasterDone <- struct{}{}:
+					case <-ctx.Done():
+					}
+				}
+			}
+
+			results[idx] = ocrPage(ctx, pdfPath, idx+1, onRasterDone)
 
 			if pageDone != nil {
 				select {
