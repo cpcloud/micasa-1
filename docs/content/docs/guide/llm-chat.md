@@ -16,6 +16,8 @@ your home data. A local LLM translates your question into
 SQL, runs it against your database, and summarizes the results. Everything
 runs locally -- your data never leaves your machine.
 
+<video src="/videos/llm-chat.webm" class="demo-video" autoplay loop muted playsinline></video>
+
 ## Prerequisites
 
 You need a local LLM server running an OpenAI-compatible API.
@@ -48,7 +50,7 @@ Press <kbd>esc</kbd> to dismiss the overlay. Your conversation is preserved -- p
 
 Type a natural language question about your home data:
 
-- "How much have I spent on plumbing?"
+- "How many projects are on hold right now?"
 - "Which projects are underway?"
 - "When is the HVAC filter due?"
 - "Show me all quotes from Ace Plumbing"

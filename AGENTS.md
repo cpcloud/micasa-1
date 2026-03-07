@@ -177,6 +177,7 @@ details; do not duplicate that detail here.
 - `/record-demo` -- after any UI/UX feature work; commit the GIF
 - `/new-fk-relationship` -- when adding FK links between soft-deletable entities
 - `/new-worktree` -- for all work unrelated to the current worktree
+- `/debug-dump` -- when diagnosing rendering bugs (VHS or live TUI)
 
 ### Shell and tools
 

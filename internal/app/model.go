@@ -783,8 +783,7 @@ func (m *Model) handleNormalKeys(key tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		return nil, true
 	case keyAt:
-		m.openChat()
-		return nil, true
+		return m.openChat(), true
 	case keyEsc:
 		if m.inDetail() {
 			m.closeDetail()
@@ -2536,7 +2535,10 @@ func (m *Model) dispatchOverlay(msg tea.Msg) (tea.Cmd, bool) {
 	}
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
-		return nil, true
+		// Non-key messages (cursor blink, spinner ticks, etc.) should not
+		// be swallowed by the overlay dispatcher. Return false so the
+		// caller's normal Update path can handle them.
+		return nil, false
 	}
 	return handler(keyMsg), true
 }
