@@ -134,3 +134,146 @@ func Models() []any {
 		&ChatInput{},
 	}
 }
+
+// metaColumn describes a single DB column's name and JSON Schema type.
+// Used by the extraction system to derive column definitions from models.
+type metaColumn struct {
+	Name     string
+	JSONType string // "string" or "integer"
+}
+
+// TableExtractColumns maps each table to its extractable columns.
+// Excludes primary keys, auto-managed timestamps, soft-delete markers,
+// GORM association fields, and binary data columns.
+var TableExtractColumns = map[string][]metaColumn{
+	TableAppliances: {
+		{Name: "name", JSONType: "string"},
+		{Name: "brand", JSONType: "string"},
+		{Name: "model_number", JSONType: "string"},
+		{Name: "serial_number", JSONType: "string"},
+		{Name: "purchase_date", JSONType: "string"},
+		{Name: "warranty_expiry", JSONType: "string"},
+		{Name: "location", JSONType: "string"},
+		{Name: "cost_cents", JSONType: "integer"},
+		{Name: "notes", JSONType: "string"},
+	},
+	TableChatInputs: {
+		{Name: "input", JSONType: "string"},
+	},
+	TableDeletionRecords: {
+		{Name: "entity", JSONType: "string"},
+		{Name: "target_id", JSONType: "integer"},
+		{Name: "restored_at", JSONType: "string"},
+	},
+	TableDocuments: {
+		{Name: "title", JSONType: "string"},
+		{Name: "file_name", JSONType: "string"},
+		{Name: "entity_kind", JSONType: "string"},
+		{Name: "entity_id", JSONType: "integer"},
+		{Name: "mime_type", JSONType: "string"},
+		{Name: "size_bytes", JSONType: "integer"},
+		{Name: "sha256", JSONType: "string"},
+		{Name: "extracted_text", JSONType: "string"},
+		{Name: "notes", JSONType: "string"},
+	},
+	TableHouseProfiles: {
+		{Name: "nickname", JSONType: "string"},
+		{Name: "address_line1", JSONType: "string"},
+		{Name: "address_line2", JSONType: "string"},
+		{Name: "city", JSONType: "string"},
+		{Name: "state", JSONType: "string"},
+		{Name: "postal_code", JSONType: "string"},
+		{Name: "year_built", JSONType: "integer"},
+		{Name: "square_feet", JSONType: "integer"},
+		{Name: "lot_square_feet", JSONType: "integer"},
+		{Name: "bedrooms", JSONType: "integer"},
+		{Name: "bathrooms", JSONType: "integer"},
+		{Name: "foundation_type", JSONType: "string"},
+		{Name: "wiring_type", JSONType: "string"},
+		{Name: "roof_type", JSONType: "string"},
+		{Name: "exterior_type", JSONType: "string"},
+		{Name: "heating_type", JSONType: "string"},
+		{Name: "cooling_type", JSONType: "string"},
+		{Name: "water_source", JSONType: "string"},
+		{Name: "sewer_type", JSONType: "string"},
+		{Name: "parking_type", JSONType: "string"},
+		{Name: "basement_type", JSONType: "string"},
+		{Name: "insurance_carrier", JSONType: "string"},
+		{Name: "insurance_policy", JSONType: "string"},
+		{Name: "insurance_renewal", JSONType: "string"},
+		{Name: "property_tax_cents", JSONType: "integer"},
+		{Name: "hoa_name", JSONType: "string"},
+		{Name: "hoa_fee_cents", JSONType: "integer"},
+	},
+	TableIncidents: {
+		{Name: "title", JSONType: "string"},
+		{Name: "description", JSONType: "string"},
+		{Name: "status", JSONType: "string"},
+		{Name: "previous_status", JSONType: "string"},
+		{Name: "severity", JSONType: "string"},
+		{Name: "date_noticed", JSONType: "string"},
+		{Name: "date_resolved", JSONType: "string"},
+		{Name: "location", JSONType: "string"},
+		{Name: "cost_cents", JSONType: "integer"},
+		{Name: "appliance_id", JSONType: "integer"},
+		{Name: "vendor_id", JSONType: "integer"},
+		{Name: "notes", JSONType: "string"},
+	},
+	TableMaintenanceCategories: {
+		{Name: "name", JSONType: "string"},
+	},
+	TableMaintenanceItems: {
+		{Name: "name", JSONType: "string"},
+		{Name: "category_id", JSONType: "integer"},
+		{Name: "appliance_id", JSONType: "integer"},
+		{Name: "last_serviced_at", JSONType: "string"},
+		{Name: "interval_months", JSONType: "integer"},
+		{Name: "due_date", JSONType: "string"},
+		{Name: "manual_url", JSONType: "string"},
+		{Name: "manual_text", JSONType: "string"},
+		{Name: "notes", JSONType: "string"},
+		{Name: "cost_cents", JSONType: "integer"},
+	},
+	TableProjectTypes: {
+		{Name: "name", JSONType: "string"},
+	},
+	TableProjects: {
+		{Name: "title", JSONType: "string"},
+		{Name: "project_type_id", JSONType: "integer"},
+		{Name: "status", JSONType: "string"},
+		{Name: "description", JSONType: "string"},
+		{Name: "start_date", JSONType: "string"},
+		{Name: "end_date", JSONType: "string"},
+		{Name: "budget_cents", JSONType: "integer"},
+		{Name: "actual_cents", JSONType: "integer"},
+	},
+	TableQuotes: {
+		{Name: "project_id", JSONType: "integer"},
+		{Name: "vendor_id", JSONType: "integer"},
+		{Name: "total_cents", JSONType: "integer"},
+		{Name: "labor_cents", JSONType: "integer"},
+		{Name: "materials_cents", JSONType: "integer"},
+		{Name: "other_cents", JSONType: "integer"},
+		{Name: "received_date", JSONType: "string"},
+		{Name: "notes", JSONType: "string"},
+	},
+	TableServiceLogEntries: {
+		{Name: "maintenance_item_id", JSONType: "integer"},
+		{Name: "serviced_at", JSONType: "string"},
+		{Name: "vendor_id", JSONType: "integer"},
+		{Name: "cost_cents", JSONType: "integer"},
+		{Name: "notes", JSONType: "string"},
+	},
+	TableSettings: {
+		{Name: "key", JSONType: "string"},
+		{Name: "value", JSONType: "string"},
+	},
+	TableVendors: {
+		{Name: "name", JSONType: "string"},
+		{Name: "contact_name", JSONType: "string"},
+		{Name: "email", JSONType: "string"},
+		{Name: "phone", JSONType: "string"},
+		{Name: "website", JSONType: "string"},
+		{Name: "notes", JSONType: "string"},
+	},
+}

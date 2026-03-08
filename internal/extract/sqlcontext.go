@@ -5,6 +5,7 @@ package extract
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/cpcloud/micasa/internal/data"
@@ -59,28 +60,51 @@ type ActionDef struct {
 }
 
 // TableDef defines a table's columns and which actions are allowed.
-// Columns are defined once; each ActionDef specifies required fields
-// and any action-specific extras.
+// Columns are derived from generated model metadata via columnsFromMeta;
+// each ActionDef specifies required fields and any action-specific extras.
 type TableDef struct {
 	Table   string
 	Columns []ColumnDef // shared columns across all actions
+	Omit    []string    // columns to exclude from ALL actions
 	Actions []ActionDef
 }
 
+// columnsFromMeta converts generated column metadata for a table into
+// ColumnDefs. Panics if the table has no generated metadata -- this is
+// intentional since extraction tables must correspond to real models.
+func columnsFromMeta(table string) []ColumnDef {
+	metas, ok := data.TableExtractColumns[table]
+	if !ok {
+		panic(fmt.Sprintf("no generated columns for table %q", table))
+	}
+	cols := make([]ColumnDef, len(metas))
+	for i, m := range metas {
+		cols[i] = ColumnDef{Name: m.Name, Type: ColType(m.JSONType)}
+	}
+	return cols
+}
+
+// withEnum returns a copy of cols where the named column gets the given
+// enum constraint. Panics if the column is not found.
+func withEnum(cols []ColumnDef, name string, values []any) []ColumnDef {
+	result := slices.Clone(cols)
+	for i := range result {
+		if result[i].Name == name {
+			result[i].Enum = values
+			return result
+		}
+	}
+	panic(fmt.Sprintf("withEnum: column %q not found", name))
+}
+
 // ExtractionTableDefs is the single source of truth for extraction table
-// metadata. Column sets match what each table's commit function in
-// shadow.go consumes.
+// metadata. Column lists are derived from generated model metadata via
+// columnsFromMeta; only policy annotations (Actions, Required, Enum, Omit,
+// synthetic columns) are hand-maintained.
 var ExtractionTableDefs = []TableDef{
 	{
-		Table: data.TableVendors,
-		Columns: []ColumnDef{
-			{Name: "name", Type: ColTypeString},
-			{Name: "contact_name", Type: ColTypeString},
-			{Name: "email", Type: ColTypeString},
-			{Name: "phone", Type: ColTypeString},
-			{Name: "website", Type: ColTypeString},
-			{Name: "notes", Type: ColTypeString},
-		},
+		Table:   data.TableVendors,
+		Columns: columnsFromMeta(data.TableVendors),
 		Actions: []ActionDef{
 			{Action: ActionCreate, Required: []string{"name"}},
 			{Action: ActionUpdate, Required: []string{"id"}, Extra: []ColumnDef{
@@ -89,16 +113,9 @@ var ExtractionTableDefs = []TableDef{
 		},
 	},
 	{
-		Table: data.TableAppliances,
-		Columns: []ColumnDef{
-			{Name: "name", Type: ColTypeString},
-			{Name: "brand", Type: ColTypeString},
-			{Name: "model_number", Type: ColTypeString},
-			{Name: "serial_number", Type: ColTypeString},
-			{Name: "location", Type: ColTypeString},
-			{Name: "cost_cents", Type: ColTypeInteger},
-			{Name: "notes", Type: ColTypeString},
-		},
+		Table:   data.TableAppliances,
+		Columns: columnsFromMeta(data.TableAppliances),
+		Omit:    []string{"purchase_date", "warranty_expiry"},
 		Actions: []ActionDef{
 			{Action: ActionCreate, Required: []string{"name"}},
 			{Action: ActionUpdate, Required: []string{"id"}, Extra: []ColumnDef{
@@ -108,10 +125,9 @@ var ExtractionTableDefs = []TableDef{
 	},
 	{
 		Table: data.TableProjects,
-		Columns: []ColumnDef{
-			{Name: "title", Type: ColTypeString},
-			{Name: "project_type_id", Type: ColTypeInteger},
-			{Name: "status", Type: ColTypeString, Enum: []any{
+		Columns: withEnum(
+			columnsFromMeta(data.TableProjects),
+			"status", []any{
 				data.ProjectStatusIdeating,
 				data.ProjectStatusPlanned,
 				data.ProjectStatusQuoted,
@@ -119,25 +135,20 @@ var ExtractionTableDefs = []TableDef{
 				data.ProjectStatusDelayed,
 				data.ProjectStatusCompleted,
 				data.ProjectStatusAbandoned,
-			}},
-			{Name: "description", Type: ColTypeString},
-			{Name: "budget_cents", Type: ColTypeInteger},
-		},
+			},
+		),
+		Omit: []string{"start_date", "end_date", "actual_cents"},
 		Actions: []ActionDef{
 			{Action: ActionCreate, Required: []string{"title"}},
 		},
 	},
 	{
 		Table: data.TableQuotes,
-		Columns: []ColumnDef{
-			{Name: "project_id", Type: ColTypeInteger},
-			{Name: "vendor_id", Type: ColTypeInteger},
-			{Name: "vendor_name", Type: ColTypeString},
-			{Name: "total_cents", Type: ColTypeInteger},
-			{Name: "labor_cents", Type: ColTypeInteger},
-			{Name: "materials_cents", Type: ColTypeInteger},
-			{Name: "notes", Type: ColTypeString},
-		},
+		Columns: append(
+			columnsFromMeta(data.TableQuotes),
+			ColumnDef{Name: "vendor_name", Type: ColTypeString},
+		),
+		Omit: []string{"other_cents", "received_date"},
 		Actions: []ActionDef{
 			{Action: ActionCreate, Required: []string{"project_id", "total_cents"}},
 			{Action: ActionUpdate, Required: []string{"id"}, Extra: []ColumnDef{
@@ -146,15 +157,9 @@ var ExtractionTableDefs = []TableDef{
 		},
 	},
 	{
-		Table: data.TableMaintenanceItems,
-		Columns: []ColumnDef{
-			{Name: "name", Type: ColTypeString},
-			{Name: "category_id", Type: ColTypeInteger},
-			{Name: "appliance_id", Type: ColTypeInteger},
-			{Name: "interval_months", Type: ColTypeInteger},
-			{Name: "cost_cents", Type: ColTypeInteger},
-			{Name: "notes", Type: ColTypeString},
-		},
+		Table:   data.TableMaintenanceItems,
+		Columns: columnsFromMeta(data.TableMaintenanceItems),
+		Omit:    []string{"last_serviced_at", "due_date", "manual_url", "manual_text"},
 		Actions: []ActionDef{
 			{Action: ActionCreate, Required: []string{"name"}},
 			{Action: ActionUpdate, Required: []string{"id"}, Extra: []ColumnDef{
@@ -164,51 +169,44 @@ var ExtractionTableDefs = []TableDef{
 	},
 	{
 		Table: data.TableIncidents,
-		Columns: []ColumnDef{
-			{Name: "title", Type: ColTypeString},
-			{Name: "description", Type: ColTypeString},
-			{Name: "status", Type: ColTypeString, Enum: []any{
-				data.IncidentStatusOpen,
-				data.IncidentStatusInProgress,
-				data.IncidentStatusResolved,
-			}},
-			{Name: "severity", Type: ColTypeString, Enum: []any{
-				data.IncidentSeverityUrgent,
-				data.IncidentSeveritySoon,
-				data.IncidentSeverityWhenever,
-			}},
-			{Name: "date_noticed", Type: ColTypeString},
-			{Name: "location", Type: ColTypeString},
-			{Name: "cost_cents", Type: ColTypeInteger},
-			{Name: "appliance_id", Type: ColTypeInteger},
-			{Name: "vendor_id", Type: ColTypeInteger},
-			{Name: "vendor_name", Type: ColTypeString},
-			{Name: "notes", Type: ColTypeString},
-		},
+		Columns: append(
+			withEnum(
+				withEnum(
+					columnsFromMeta(data.TableIncidents),
+					"status", []any{
+						data.IncidentStatusOpen,
+						data.IncidentStatusInProgress,
+						data.IncidentStatusResolved,
+					},
+				),
+				"severity", []any{
+					data.IncidentSeverityUrgent,
+					data.IncidentSeveritySoon,
+					data.IncidentSeverityWhenever,
+				},
+			),
+			ColumnDef{Name: "vendor_name", Type: ColTypeString},
+		),
+		Omit: []string{"previous_status", "date_resolved"},
 		Actions: []ActionDef{
 			{Action: ActionCreate, Required: []string{"title"}},
 		},
 	},
 	{
 		Table: data.TableServiceLogEntries,
-		Columns: []ColumnDef{
-			{Name: "maintenance_item_id", Type: ColTypeInteger},
-			{Name: "serviced_at", Type: ColTypeString},
-			{Name: "vendor_id", Type: ColTypeInteger},
-			{Name: "vendor_name", Type: ColTypeString},
-			{Name: "cost_cents", Type: ColTypeInteger},
-			{Name: "notes", Type: ColTypeString},
-		},
+		Columns: append(
+			columnsFromMeta(data.TableServiceLogEntries),
+			ColumnDef{Name: "vendor_name", Type: ColTypeString},
+		),
 		Actions: []ActionDef{
 			{Action: ActionCreate, Required: []string{"maintenance_item_id"}},
 		},
 	},
 	{
 		Table: data.TableDocuments,
-		Columns: []ColumnDef{
-			{Name: "title", Type: ColTypeString},
-			{Name: "notes", Type: ColTypeString},
-			{Name: "entity_kind", Type: ColTypeString, Enum: []any{
+		Columns: withEnum(
+			columnsFromMeta(data.TableDocuments),
+			"entity_kind", []any{
 				data.DocumentEntityProject,
 				data.DocumentEntityQuote,
 				data.DocumentEntityMaintenance,
@@ -216,10 +214,9 @@ var ExtractionTableDefs = []TableDef{
 				data.DocumentEntityServiceLog,
 				data.DocumentEntityVendor,
 				data.DocumentEntityIncident,
-			}},
-			{Name: "entity_id", Type: ColTypeInteger},
-			{Name: "file_name", Type: ColTypeString},
-		},
+			},
+		),
+		Omit: []string{"mime_type", "size_bytes", "sha256", "extracted_text"},
 		Actions: []ActionDef{
 			{Action: ActionCreate},
 			{Action: ActionUpdate, Required: []string{"id"}, Extra: []ColumnDef{
@@ -256,7 +253,10 @@ var ExtractionOps = func() []TableOp {
 }()
 
 func expandTableOp(td TableDef, ad ActionDef) TableOp {
-	omit := make(map[string]bool, len(ad.Omit))
+	omit := make(map[string]bool, len(td.Omit)+len(ad.Omit))
+	for _, name := range td.Omit {
+		omit[name] = true
+	}
 	for _, name := range ad.Omit {
 		omit[name] = true
 	}

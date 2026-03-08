@@ -264,6 +264,11 @@ details; do not duplicate that detail here.
   If a new style duplicates an existing definition, add a method alias instead
   of a new field. Never inline `lipgloss.NewStyle()` in rendering functions --
   it defeats the singleton and reintroduces per-frame copies.
+- **Unexported by default**: Start with unexported (private) types, functions,
+  and fields. Only export when another package actually needs access. Go allows
+  accessing exported fields on unexported types cross-package, so even
+  cross-package data can stay unexported if no external code needs to name
+  the type.
 - **Key strings use constants**: All keyboard key strings in dispatch
   (`case`, `key.String() ==`), `key.WithKeys`, `SetKeys`, `helpItem`,
   `renderKeys`, and display hints must use constants defined in
