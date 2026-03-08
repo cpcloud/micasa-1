@@ -125,7 +125,7 @@
             };
             nixfmt.enable = true;
             golangci-lint = {
-              enable = true;
+              enable = false; # CI-only job
               stages = [ "pre-push" ];
             };
             actionlint.enable = true;
@@ -160,7 +160,7 @@
               pass_filenames = false;
             };
             deadcode-check = {
-              enable = true;
+              enable = false; # CI-only job
               name = "deadcode";
               entry = "${run-deadcode}/bin/run-deadcode";
               files = "\\.go$";
@@ -169,7 +169,7 @@
               stages = [ "pre-push" ];
             };
             govulncheck = {
-              enable = true;
+              enable = false; # CI-only job
               name = "govulncheck";
               entry = "${run-govulncheck}/bin/run-govulncheck";
               files = "^go\\.(mod|sum)$";
@@ -178,7 +178,7 @@
               stages = [ "pre-push" ];
             };
             osv-scanner = {
-              enable = true;
+              enable = false; # CI-only job
               name = "osv-scanner";
               entry = "${run-osv-scanner}/bin/run-osv-scanner";
               files = "^go\\.(mod|sum)$";
@@ -289,6 +289,22 @@
           runtimeInputs = [ pkgs.osv-scanner ];
           text = ''
             osv-scanner scan --config osv-scanner.toml --no-ignore --recursive .
+          '';
+        };
+
+        run-golangci-lint = pkgs.writeShellApplication {
+          name = "run-golangci-lint";
+          runtimeInputs = [
+            pkgs.golangci-lint
+            pkgs.go
+          ];
+          runtimeEnv.CGO_ENABLED = "0";
+          text = ''
+            _tmpdir=$(mktemp -d -t micasa-golangci-lint-XXXXXX)
+            trap 'chmod -R u+w "$_tmpdir" 2>/dev/null; rm -rf "$_tmpdir"' EXIT
+            export GOCACHE="''${GOCACHE:-$_tmpdir/gocache}"
+            export GOMODCACHE="''${GOMODCACHE:-$_tmpdir/gomodcache}"
+            golangci-lint run ./...
           '';
         };
 
@@ -596,7 +612,12 @@
               gen-mixed-pdf
             '';
           };
-          inherit run-deadcode run-govulncheck run-osv-scanner;
+          inherit
+            run-deadcode
+            run-govulncheck
+            run-osv-scanner
+            run-golangci-lint
+            ;
           run-pre-commit = pkgs.writeShellApplication {
             name = "run-pre-commit";
             runtimeInputs = [
@@ -617,8 +638,11 @@
             ];
             text = ''
               ${preCommit.shellHook}
-              pre-commit run --all-files
-              pre-commit run --all-files --hook-stage pre-push
+              if [ $# -eq 0 ]; then
+                set -- --all-files
+              fi
+              pre-commit run "$@"
+              pre-commit run "$@" --hook-stage pre-push
             '';
           };
 
@@ -646,6 +670,7 @@
             deadcode = app (pkg "run-deadcode") "Run whole-program dead code analysis";
             govulncheck = app (pkg "run-govulncheck") "Check for known Go vulnerabilities with call-graph analysis";
             osv-scanner = app (pkg "run-osv-scanner") "Scan for known vulnerabilities";
+            golangci-lint = app (pkg "run-golangci-lint") "Run golangci-lint";
             pre-commit = app (pkg "run-pre-commit") "Run all pre-commit hooks";
           };
 
