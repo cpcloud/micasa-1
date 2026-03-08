@@ -2719,3 +2719,115 @@ func TestExtractionExtractFails_PingSkipPreventsLLM(t *testing.T) {
 	assert.Equal(t, stepSkipped, ex.Steps[stepLLM].Status)
 	assert.True(t, ex.Done)
 }
+
+// --- Accept works with or without LLM ---
+
+func TestAccept_WorksWhenLLMFailed(t *testing.T) {
+	t.Parallel()
+	m := newExtractionModel(t, map[extractionStep]stepStatus{
+		stepText: stepDone,
+		stepLLM:  stepFailed,
+	})
+	ex := m.ex.extraction
+	ex.Done = true
+	ex.HasError = true
+	ex.pendingText = "ocr text"
+
+	doc := &data.Document{
+		FileName: "invoice.pdf",
+		MIMEType: "application/pdf",
+		Data:     []byte("pdf-bytes"),
+	}
+	require.NoError(t, m.store.CreateDocument(doc))
+	ex.DocID = doc.ID
+
+	sendExtractionKey(m, "a")
+
+	assert.Nil(t, m.ex.extraction, "accept should work even when LLM failed")
+
+	saved, err := m.store.GetDocument(doc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ocr text", saved.ExtractedText)
+}
+
+func TestAccept_WorksWithoutLLMStep(t *testing.T) {
+	t.Parallel()
+	m := newExtractionModel(t, map[extractionStep]stepStatus{
+		stepText:    stepDone,
+		stepExtract: stepDone,
+	})
+	ex := m.ex.extraction
+	ex.Done = true
+	ex.pendingText = "ocr text"
+
+	doc := &data.Document{
+		FileName: "scan.pdf",
+		MIMEType: "application/pdf",
+		Data:     []byte("pdf-bytes"),
+	}
+	require.NoError(t, m.store.CreateDocument(doc))
+	ex.DocID = doc.ID
+
+	sendExtractionKey(m, "a")
+
+	assert.Nil(t, m.ex.extraction, "accept should work without LLM step")
+
+	saved, err := m.store.GetDocument(doc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ocr text", saved.ExtractedText)
+}
+
+func TestAccept_DeferredDoc_WorksWhenLLMFailed(t *testing.T) {
+	t.Parallel()
+	m := newExtractionModel(t, map[extractionStep]stepStatus{
+		stepText: stepDone,
+		stepLLM:  stepFailed,
+	})
+	ex := m.ex.extraction
+	ex.Done = true
+	ex.HasError = true
+	ex.extractedText = "invoice text"
+	ex.pendingDoc = &data.Document{
+		FileName:      "invoice.pdf",
+		MIMEType:      "application/pdf",
+		Data:          []byte("pdf-bytes"),
+		ExtractedText: "invoice text",
+	}
+
+	sendExtractionKey(m, "a")
+
+	assert.Nil(t, m.ex.extraction, "accept should work for deferred doc when LLM failed")
+
+	docs, err := m.store.ListDocuments(false)
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+	assert.Equal(t, "invoice.pdf", docs[0].FileName)
+}
+
+func TestAccept_DeferredDoc_WorksWithoutLLMStep(t *testing.T) {
+	t.Parallel()
+	m := newExtractionModel(t, map[extractionStep]stepStatus{
+		stepText:    stepDone,
+		stepExtract: stepDone,
+	})
+	ex := m.ex.extraction
+	ex.Done = true
+	ex.pendingText = "better ocr text"
+	ex.pendingDoc = &data.Document{
+		FileName: "scan.pdf",
+		MIMEType: "application/pdf",
+		Data:     []byte("pdf-bytes"),
+	}
+
+	sendExtractionKey(m, "a")
+
+	assert.Nil(t, m.ex.extraction, "accept should work for deferred doc without LLM")
+
+	docs, err := m.store.ListDocuments(false)
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+
+	full, err := m.store.GetDocument(docs[0].ID)
+	require.NoError(t, err)
+	assert.Equal(t, "better ocr text", full.ExtractedText)
+}

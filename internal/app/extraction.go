@@ -813,6 +813,7 @@ func applyStringField(data map[string]any, key string, dst *string) {
 }
 
 // acceptExtraction persists all pending results and closes the overlay.
+// Works regardless of whether LLM ran, failed, or was skipped.
 func (m *Model) acceptExtraction() {
 	ex := m.ex.extraction
 	if ex == nil || !ex.Done || ex.accepted {
@@ -820,13 +821,11 @@ func (m *Model) acceptExtraction() {
 	}
 
 	if ex.pendingDoc != nil {
-		// Deferred creation (magic-add): create document now.
 		if err := m.acceptDeferredExtraction(); err != nil {
 			m.setStatusError(err.Error())
 			return
 		}
 	} else {
-		// Existing document: persist extraction results and dispatch ops.
 		if err := m.acceptExistingExtraction(); err != nil {
 			m.setStatusError(err.Error())
 			return
@@ -879,6 +878,7 @@ func (m *Model) acceptDeferredExtraction() error {
 	if err := m.commitShadowOperations(ex, nonDocOps); err != nil {
 		return fmt.Errorf("dispatch operations: %w", err)
 	}
+	m.reloadAfterMutation()
 	return nil
 }
 
@@ -1075,7 +1075,7 @@ func (m *Model) handleExtractionPipelineKey(msg tea.KeyMsg) tea.Cmd {
 			return m.activateExtractionModelPicker()
 		}
 	case keyA:
-		if ex.Done && !ex.HasError {
+		if ex.Done {
 			m.acceptExtraction()
 		}
 	case keyX:
@@ -1264,7 +1264,7 @@ func (m *Model) handleExtractionExploreKey(msg tea.KeyMsg) tea.Cmd {
 			ex.previewCol = len(g.specs) - 1
 		}
 	case keyA:
-		if ex.Done && !ex.HasError {
+		if ex.Done {
 			m.acceptExtraction()
 		}
 	case keyX:
@@ -1495,10 +1495,7 @@ func (m *Model) buildExtractionPipelineOverlay(
 		if len(ex.previewGroups) > 1 {
 			hints = append(hints, m.helpItem(keyB+"/"+keyF, "tabs"))
 		}
-		if !ex.HasError {
-			hints = append(hints, m.helpItem(keyA, "accept"))
-		}
-		hints = append(hints, m.helpItem(keyX, "back"), m.helpItem(keyEsc, "discard"))
+		hints = append(hints, m.helpItem(keyA, "accept"), m.helpItem(keyX, "back"), m.helpItem(keyEsc, "discard"))
 	} else {
 		hints = append(hints, m.helpItem(keyJ+"/"+keyK, "navigate"))
 		cursorStatus := ex.Steps[ex.cursorStep()].Status
@@ -1509,10 +1506,7 @@ func (m *Model) buildExtractionPipelineOverlay(
 			hints = append(hints, m.helpItem(keyX, "explore"))
 		}
 		if ex.Done {
-			if !ex.HasError {
-				hints = append(hints, m.helpItem(keyA, "accept"))
-			}
-			hints = append(hints, m.helpItem(keyEsc, "discard"))
+			hints = append(hints, m.helpItem(keyA, "accept"), m.helpItem(keyEsc, "discard"))
 		} else {
 			hints = append(hints,
 				m.helpItem(symCtrlC, "int"),
