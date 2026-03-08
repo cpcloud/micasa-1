@@ -530,7 +530,7 @@ func (m *Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// Intercept ESC on dirty forms to confirm before discarding.
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == keyEsc {
-		mandatoryHouse := m.fs.formKind == formHouse && !m.hasHouse
+		mandatoryHouse := m.fs.formKind() == formHouse && !m.hasHouse
 		if m.fs.formDirty && !mandatoryHouse {
 			m.confirm = confirmFormDiscard
 			return m, nil
@@ -548,7 +548,7 @@ func (m *Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case huh.StateCompleted:
 		return m, m.saveForm()
 	case huh.StateAborted:
-		if m.fs.formKind == formHouse && !m.hasHouse {
+		if m.fs.formKind() == formHouse && !m.hasHouse {
 			m.setStatusError("House profile required.")
 			m.startHouseForm()
 			return m, m.formInitCmd()
@@ -2182,8 +2182,8 @@ func (m *Model) saveForm() tea.Cmd {
 		return m.saveDeferredDocumentForm()
 	}
 
-	isFirstHouse := m.fs.formKind == formHouse && !m.hasHouse
-	kind := m.fs.formKind
+	isFirstHouse := m.fs.formKind() == formHouse && !m.hasHouse
+	kind := m.fs.formKind()
 	err := m.handleFormSubmit()
 	if err != nil {
 		m.setStatusError(err.Error())
@@ -2211,7 +2211,7 @@ func (m *Model) saveFormInPlace() tea.Cmd {
 	if fd, ok := m.fs.formData.(*documentFormData); ok && fd.DeferCreate {
 		return m.saveQuickDocumentDirect()
 	}
-	kind := m.fs.formKind
+	kind := m.fs.formKind()
 	isCreate := m.fs.editID == nil
 	err := m.handleFormSubmit()
 	if err != nil {
@@ -2327,17 +2327,21 @@ func (m *Model) checkFormDirty() {
 // cloneFormData makes a shallow copy of the struct behind a form-data
 // pointer so the snapshot is independent of later mutations. All form
 // data types are pointer-to-struct with only value-type fields.
-func cloneFormData(data any) any {
-	if data == nil {
+func cloneFormData(d formData) formData {
+	if d == nil {
 		return nil
 	}
-	v := reflect.ValueOf(data)
+	v := reflect.ValueOf(d)
 	if v.Kind() == reflect.Ptr && !v.IsNil() {
 		cp := reflect.New(v.Elem().Type())
 		cp.Elem().Set(v.Elem())
-		return cp.Interface()
+		cloned, ok := cp.Interface().(formData)
+		if !ok {
+			return d
+		}
+		return cloned
 	}
-	return data
+	return d
 }
 
 // openHelp creates a viewport sized to fit the terminal and populated with
@@ -2400,7 +2404,7 @@ func (m *Model) submitInlineInput() {
 		}
 	}
 	*ii.FieldPtr = value
-	kind := ii.FormKind
+	kind := ii.FormData.formKind()
 	if err := m.handleFormSubmit(); err != nil {
 		m.setStatusError(err.Error())
 		return
@@ -2413,7 +2417,6 @@ func (m *Model) submitInlineInput() {
 // resetFormState zeroes all form-related fields. Every path that exits a
 // form, inline edit, or calendar overlay should call this to prevent drift.
 func (m *Model) resetFormState() {
-	m.fs.formKind = formNone
 	m.fs.form = nil
 	m.fs.formData = nil
 	m.fs.formSnapshot = nil
@@ -2926,7 +2929,6 @@ func (m *Model) launchExternalEditor() tea.Cmd {
 
 	m.fs.pendingEditor = &editorState{
 		EditID:   0,
-		FormKind: m.fs.formKind,
 		FormData: m.fs.formData,
 		FieldPtr: m.fs.notesFieldPtr,
 		TempFile: f.Name(),
@@ -2988,7 +2990,7 @@ func (m *Model) reopenNotesEdit(pe *editorState) {
 		m.fs.editID = &id
 	}
 	m.fs.formData = pe.FormData
-	m.openNotesTextarea(pe.FormKind, pe.FieldPtr, pe.FormData)
+	m.openNotesTextarea(pe.FieldPtr, pe.FormData)
 }
 
 // autoDetectModel checks if the LLM server has exactly one model available

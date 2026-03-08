@@ -22,7 +22,7 @@ func (m *Model) buildView() string {
 		return m.buildTerminalTooSmallView()
 	}
 
-	if m.mode == modeForm && m.fs.form != nil && m.fs.formKind == formHouse {
+	if m.mode == modeForm && m.fs.form != nil && m.fs.formKind() == formHouse {
 		return m.formFullScreen()
 	}
 

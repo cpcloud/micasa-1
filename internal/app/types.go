@@ -55,11 +55,17 @@ func (k confirmKind) isFormConfirm() bool {
 	return k == confirmFormDiscard || k == confirmFormQuitDiscard
 }
 
+// formData is implemented by every form data struct, binding it to a specific
+// FormKind at compile time. This replaces the old `any` field and eliminates
+// the risk of formKind/formData type mismatches.
+type formData interface {
+	formKind() FormKind
+}
+
 type formState struct {
-	formKind        FormKind
 	form            *huh.Form
-	formData        any
-	formSnapshot    any
+	formData        formData
+	formSnapshot    formData
 	formDirty       bool
 	formHasRequired bool
 	pendingFormInit tea.Cmd
@@ -67,6 +73,15 @@ type formState struct {
 	notesEditMode   bool
 	notesFieldPtr   *string
 	pendingEditor   *editorState
+}
+
+// formKind returns the FormKind of the current form data, or formNone when no
+// form is active. Derived from formData so mismatch is impossible.
+func (fs *formState) formKind() FormKind {
+	if fs.formData == nil {
+		return formNone
+	}
+	return fs.formData.formKind()
 }
 
 type extractState struct {
@@ -382,8 +397,7 @@ type inlineInputState struct {
 	Input    textinput.Model
 	Title    string
 	EditID   uint
-	FormKind FormKind
-	FormData any
+	FormData formData
 	FieldPtr *string            // pointer into FormData
 	Validate func(string) error // nil = no validation
 }
@@ -392,8 +406,7 @@ type inlineInputState struct {
 // restore the textarea with the edited content when the editor exits.
 type editorState struct {
 	EditID   uint
-	FormKind FormKind
-	FormData any
+	FormData formData
 	FieldPtr *string // pointer into FormData for the notes field
 	TempFile string  // path to the temp file passed to the editor
 }

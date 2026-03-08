@@ -21,6 +21,16 @@ import (
 	"github.com/cpcloud/micasa/internal/locale"
 )
 
+func (*houseFormData) formKind() FormKind       { return formHouse }
+func (*projectFormData) formKind() FormKind     { return formProject }
+func (*quoteFormData) formKind() FormKind       { return formQuote }
+func (*maintenanceFormData) formKind() FormKind { return formMaintenance }
+func (*serviceLogFormData) formKind() FormKind  { return formServiceLog }
+func (*vendorFormData) formKind() FormKind      { return formVendor }
+func (*documentFormData) formKind() FormKind    { return formDocument }
+func (*incidentFormData) formKind() FormKind    { return formIncident }
+func (*applianceFormData) formKind() FormKind   { return formAppliance }
+
 type houseFormData struct {
 	Nickname         string
 	AddressLine1     string
@@ -255,7 +265,7 @@ func (m *Model) startHouseForm() {
 		formWidth = m.width - 10
 	}
 	form.WithWidth(formWidth)
-	m.activateForm(formHouse, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) startProjectForm() {
@@ -282,7 +292,7 @@ func (m *Model) startProjectForm() {
 				Value(&values.Status),
 		),
 	)
-	m.activateForm(formProject, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) startEditProjectForm(id uint) error {
@@ -337,7 +347,7 @@ func (m *Model) openProjectForm(values *projectFormData, options []huh.Option[ui
 				Value(&values.Description),
 		).Title("Timeline"),
 	)
-	m.activateForm(formProject, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) startQuoteForm() error {
@@ -368,7 +378,7 @@ func (m *Model) startQuoteForm() error {
 				Validate(requiredMoney("total", m.cur)),
 		),
 	)
-	m.activateForm(formQuote, form, values)
+	m.activateForm(form, values)
 	return nil
 }
 
@@ -435,7 +445,7 @@ func (m *Model) openQuoteForm(values *quoteFormData, projectOpts []huh.Option[ui
 			huh.NewText().Title("Notes").Value(&values.Notes),
 		).Title("Quote"),
 	)
-	m.activateForm(formQuote, form, values)
+	m.activateForm(form, values)
 }
 
 func scheduleTypeOptions() []huh.Option[scheduleType] {
@@ -490,7 +500,7 @@ func (m *Model) startMaintenanceForm() error {
 				Validate(optionalDate("due date")),
 		).WithHideFunc(func() bool { return values.ScheduleType != schedDueDate }),
 	)
-	m.activateForm(formMaintenance, form, values)
+	m.activateForm(form, values)
 	return nil
 }
 
@@ -563,7 +573,7 @@ func (m *Model) openMaintenanceForm(
 			huh.NewText().Title("Notes").Value(&values.Notes),
 		).Title("Details"),
 	)
-	m.activateForm(formMaintenance, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) startIncidentForm() error {
@@ -608,7 +618,7 @@ func (m *Model) startIncidentForm() error {
 				Value(&values.VendorID),
 		).Title("Links"),
 	)
-	m.activateForm(formIncident, form, values)
+	m.activateForm(form, values)
 	return nil
 }
 
@@ -679,7 +689,7 @@ func (m *Model) openIncidentForm(
 			huh.NewText().Title("Notes").Value(&values.Notes),
 		).Title("Context"),
 	)
-	m.activateForm(formIncident, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) submitIncidentForm() error {
@@ -750,7 +760,6 @@ func (m *Model) inlineEditIncident(id uint, col incidentCol) error {
 	case incidentColTitle:
 		m.openInlineInput(
 			id,
-			formIncident,
 			"Title",
 			"",
 			&values.Title,
@@ -761,14 +770,14 @@ func (m *Model) inlineEditIncident(id uint, col incidentCol) error {
 		field := huh.NewSelect[string]().Title("Status").
 			Options(incidentStatusOptions()...).
 			Value(&values.Status)
-		m.openInlineEdit(id, formIncident, field, values)
+		m.openInlineEdit(id, field, values)
 	case incidentColSeverity:
 		field := huh.NewSelect[string]().Title("Severity").
 			Options(incidentSeverityOptions()...).
 			Value(&values.Severity)
-		m.openInlineEdit(id, formIncident, field, values)
+		m.openInlineEdit(id, field, values)
 	case incidentColLocation:
-		m.openInlineInput(id, formIncident, "Location", "Kitchen", &values.Location, nil, values)
+		m.openInlineInput(id, "Location", "Kitchen", &values.Location, nil, values)
 	case incidentColAppliance:
 		appliances, loadErr := m.store.ListAppliances(false)
 		if loadErr != nil {
@@ -778,21 +787,20 @@ func (m *Model) inlineEditIncident(id uint, col incidentCol) error {
 		field := huh.NewSelect[uint]().Title("Appliance").
 			Options(appOpts...).
 			Value(&values.ApplianceID)
-		m.openInlineEdit(id, formIncident, field, values)
+		m.openInlineEdit(id, field, values)
 	case incidentColVendor:
 		vendorOpts := vendorOpts("(none)", m.vendors)
 		field := huh.NewSelect[uint]().Title("Vendor").
 			Options(vendorOpts...).
 			Value(&values.VendorID)
-		m.openInlineEdit(id, formIncident, field, values)
+		m.openInlineEdit(id, field, values)
 	case incidentColNoticed:
-		m.openDatePicker(id, formIncident, &values.DateNoticed, values)
+		m.openDatePicker(id, &values.DateNoticed, values)
 	case incidentColResolved:
-		m.openDatePicker(id, formIncident, &values.DateResolved, values)
+		m.openDatePicker(id, &values.DateResolved, values)
 	case incidentColCost:
 		m.openInlineInput(
 			id,
-			formIncident,
 			"Cost",
 			"250.00",
 			&values.Cost,
@@ -899,7 +907,7 @@ func (m *Model) startApplianceForm() {
 				Validate(requiredText("name")),
 		),
 	)
-	m.activateForm(formAppliance, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) startEditApplianceForm(id uint) error {
@@ -943,7 +951,7 @@ func (m *Model) openApplianceForm(values *applianceFormData) {
 			huh.NewText().Title("Notes").Value(&values.Notes),
 		).Title("Details"),
 	)
-	m.activateForm(formAppliance, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) submitApplianceForm() error {
@@ -998,7 +1006,7 @@ func (m *Model) startVendorForm() {
 				Validate(requiredText("name")),
 		),
 	)
-	m.activateForm(formVendor, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) startEditVendorForm(id uint) error {
@@ -1027,7 +1035,7 @@ func (m *Model) openVendorForm(values *vendorFormData) {
 			huh.NewText().Title("Notes").Value(&values.Notes),
 		),
 	)
-	m.activateForm(formVendor, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) submitVendorForm() error {
@@ -1064,15 +1072,15 @@ func (m *Model) inlineEditVendor(id uint, col vendorCol) error {
 	values := vendorFormValues(vendor)
 	switch col {
 	case vendorColName:
-		m.openInlineInput(id, formVendor, "Name", "", &values.Name, requiredText("name"), values)
+		m.openInlineInput(id, "Name", "", &values.Name, requiredText("name"), values)
 	case vendorColContact:
-		m.openInlineInput(id, formVendor, "Contact name", "", &values.ContactName, nil, values)
+		m.openInlineInput(id, "Contact name", "", &values.ContactName, nil, values)
 	case vendorColEmail:
-		m.openInlineInput(id, formVendor, "Email", "", &values.Email, nil, values)
+		m.openInlineInput(id, "Email", "", &values.Email, nil, values)
 	case vendorColPhone:
-		m.openInlineInput(id, formVendor, "Phone", "", &values.Phone, nil, values)
+		m.openInlineInput(id, "Phone", "", &values.Phone, nil, values)
 	case vendorColWebsite:
-		m.openInlineInput(id, formVendor, "Website", "", &values.Website, nil, values)
+		m.openInlineInput(id, "Website", "", &values.Website, nil, values)
 	case vendorColID, vendorColQuotes, vendorColJobs, vendorColDocs:
 		return m.startEditVendorForm(id)
 	}
@@ -1102,11 +1110,10 @@ func (m *Model) inlineEditProject(id uint, col projectCol) error {
 		field := huh.NewSelect[uint]().Title("Project type").
 			Options(options...).
 			Value(&values.ProjectTypeID)
-		m.openInlineEdit(id, formProject, field, values)
+		m.openInlineEdit(id, field, values)
 	case projectColTitle:
 		m.openInlineInput(
 			id,
-			formProject,
 			"Title",
 			"",
 			&values.Title,
@@ -1117,11 +1124,10 @@ func (m *Model) inlineEditProject(id uint, col projectCol) error {
 		field := huh.NewSelect[string]().Title("Status").
 			Options(statusOptions()...).
 			Value(&values.Status)
-		m.openInlineEdit(id, formProject, field, values)
+		m.openInlineEdit(id, field, values)
 	case projectColBudget:
 		m.openInlineInput(
 			id,
-			formProject,
 			"Budget",
 			"1250.00",
 			&values.Budget,
@@ -1131,7 +1137,6 @@ func (m *Model) inlineEditProject(id uint, col projectCol) error {
 	case projectColActual:
 		m.openInlineInput(
 			id,
-			formProject,
 			"Actual cost",
 			"1400.00",
 			&values.Actual,
@@ -1139,9 +1144,9 @@ func (m *Model) inlineEditProject(id uint, col projectCol) error {
 			values,
 		)
 	case projectColStart:
-		m.openDatePicker(id, formProject, &values.StartDate, values)
+		m.openDatePicker(id, &values.StartDate, values)
 	case projectColEnd:
-		m.openDatePicker(id, formProject, &values.EndDate, values)
+		m.openDatePicker(id, &values.EndDate, values)
 	case projectColID, projectColQuotes, projectColDocs:
 		return m.startEditProjectForm(id)
 	}
@@ -1164,11 +1169,10 @@ func (m *Model) inlineEditQuote(id uint, col quoteCol) error {
 		field := huh.NewSelect[uint]().Title("Project").
 			Options(projectOpts...).
 			Value(&values.ProjectID)
-		m.openInlineEdit(id, formQuote, field, values)
+		m.openInlineEdit(id, field, values)
 	case quoteColVendor:
 		m.openInlineInput(
 			id,
-			formQuote,
 			"Vendor name",
 			"",
 			&values.VendorName,
@@ -1178,7 +1182,6 @@ func (m *Model) inlineEditQuote(id uint, col quoteCol) error {
 	case quoteColTotal:
 		m.openInlineInput(
 			id,
-			formQuote,
 			"Total",
 			"3250.00",
 			&values.Total,
@@ -1188,7 +1191,6 @@ func (m *Model) inlineEditQuote(id uint, col quoteCol) error {
 	case quoteColLabor:
 		m.openInlineInput(
 			id,
-			formQuote,
 			"Labor",
 			"2000.00",
 			&values.Labor,
@@ -1198,7 +1200,6 @@ func (m *Model) inlineEditQuote(id uint, col quoteCol) error {
 	case quoteColMat:
 		m.openInlineInput(
 			id,
-			formQuote,
 			"Materials",
 			"1000.00",
 			&values.Materials,
@@ -1208,7 +1209,6 @@ func (m *Model) inlineEditQuote(id uint, col quoteCol) error {
 	case quoteColOther:
 		m.openInlineInput(
 			id,
-			formQuote,
 			"Other",
 			"250.00",
 			&values.Other,
@@ -1216,7 +1216,7 @@ func (m *Model) inlineEditQuote(id uint, col quoteCol) error {
 			values,
 		)
 	case quoteColRecv:
-		m.openDatePicker(id, formQuote, &values.ReceivedDate, values)
+		m.openDatePicker(id, &values.ReceivedDate, values)
 	case quoteColID, quoteColDocs:
 		return m.startEditQuoteForm(id)
 	}
@@ -1233,7 +1233,6 @@ func (m *Model) inlineEditMaintenance(id uint, col maintenanceCol) error {
 	case maintenanceColItem:
 		m.openInlineInput(
 			id,
-			formMaintenance,
 			"Item",
 			"",
 			&values.Name,
@@ -1245,7 +1244,7 @@ func (m *Model) inlineEditMaintenance(id uint, col maintenanceCol) error {
 		field := huh.NewSelect[uint]().Title("Category").
 			Options(catOptions...).
 			Value(&values.CategoryID)
-		m.openInlineEdit(id, formMaintenance, field, values)
+		m.openInlineEdit(id, field, values)
 	case maintenanceColAppliance:
 		appliances, loadErr := m.store.ListAppliances(false)
 		if loadErr != nil {
@@ -1255,15 +1254,14 @@ func (m *Model) inlineEditMaintenance(id uint, col maintenanceCol) error {
 		field := huh.NewSelect[uint]().Title("Appliance").
 			Options(appOpts...).
 			Value(&values.ApplianceID)
-		m.openInlineEdit(id, formMaintenance, field, values)
+		m.openInlineEdit(id, field, values)
 	case maintenanceColLast:
-		m.openDatePicker(id, formMaintenance, &values.LastServiced, values)
+		m.openDatePicker(id, &values.LastServiced, values)
 	case maintenanceColEvery:
 		values.ScheduleType = schedInterval
 		values.DueDate = ""
 		m.openInlineInput(
 			id,
-			formMaintenance,
 			"Interval",
 			"6m",
 			&values.IntervalMonths,
@@ -1273,7 +1271,7 @@ func (m *Model) inlineEditMaintenance(id uint, col maintenanceCol) error {
 	case maintenanceColNext:
 		values.ScheduleType = schedDueDate
 		values.IntervalMonths = ""
-		m.openDatePicker(id, formMaintenance, &values.DueDate, values)
+		m.openDatePicker(id, &values.DueDate, values)
 	case maintenanceColID, maintenanceColLog, maintenanceColDocs:
 		return m.startEditMaintenanceForm(id)
 	}
@@ -1288,23 +1286,22 @@ func (m *Model) inlineEditAppliance(id uint, col applianceCol) error {
 	values := applianceFormValues(item, m.cur)
 	switch col {
 	case applianceColName:
-		m.openInlineInput(id, formAppliance, "Name", "", &values.Name, requiredText("name"), values)
+		m.openInlineInput(id, "Name", "", &values.Name, requiredText("name"), values)
 	case applianceColBrand:
-		m.openInlineInput(id, formAppliance, "Brand", "", &values.Brand, nil, values)
+		m.openInlineInput(id, "Brand", "", &values.Brand, nil, values)
 	case applianceColModel:
-		m.openInlineInput(id, formAppliance, "Model number", "", &values.ModelNumber, nil, values)
+		m.openInlineInput(id, "Model number", "", &values.ModelNumber, nil, values)
 	case applianceColSerial:
-		m.openInlineInput(id, formAppliance, "Serial number", "", &values.SerialNumber, nil, values)
+		m.openInlineInput(id, "Serial number", "", &values.SerialNumber, nil, values)
 	case applianceColLocation:
-		m.openInlineInput(id, formAppliance, "Location", "Kitchen", &values.Location, nil, values)
+		m.openInlineInput(id, "Location", "Kitchen", &values.Location, nil, values)
 	case applianceColPurchased:
-		m.openDatePicker(id, formAppliance, &values.PurchaseDate, values)
+		m.openDatePicker(id, &values.PurchaseDate, values)
 	case applianceColWarranty:
-		m.openDatePicker(id, formAppliance, &values.WarrantyExpiry, values)
+		m.openDatePicker(id, &values.WarrantyExpiry, values)
 	case applianceColCost:
 		m.openInlineInput(
 			id,
-			formAppliance,
 			"Cost",
 			"899.00",
 			&values.Cost,
@@ -1335,7 +1332,7 @@ func (m *Model) startServiceLogForm(maintenanceItemID uint) error {
 				Value(&values.VendorID),
 		),
 	)
-	m.activateForm(formServiceLog, form, values)
+	m.activateForm(form, values)
 	return nil
 }
 
@@ -1373,7 +1370,7 @@ func (m *Model) openServiceLogForm(
 			huh.NewText().Title("Notes").Value(&values.Notes),
 		),
 	)
-	m.activateForm(formServiceLog, form, values)
+	m.activateForm(form, values)
 }
 
 func (m *Model) submitServiceLogForm() error {
@@ -1427,18 +1424,17 @@ func (m *Model) inlineEditServiceLog(id uint, col serviceLogCol) error {
 	values := serviceLogFormValues(entry, m.cur)
 	switch col {
 	case serviceLogColDate:
-		m.openDatePicker(id, formServiceLog, &values.ServicedAt, values)
+		m.openDatePicker(id, &values.ServicedAt, values)
 	case serviceLogColPerformedBy:
 		vendorOpts := vendorOpts("Self (homeowner)", m.vendors)
 		field := huh.NewSelect[uint]().
 			Title("Performed by").
 			Options(vendorOpts...).
 			Value(&values.VendorID)
-		m.openInlineEdit(id, formServiceLog, field, values)
+		m.openInlineEdit(id, field, values)
 	case serviceLogColCost:
 		m.openInlineInput(
 			id,
-			formServiceLog,
 			"Cost",
 			"125.00",
 			&values.Cost,
@@ -1446,7 +1442,7 @@ func (m *Model) inlineEditServiceLog(id uint, col serviceLogCol) error {
 			values,
 		)
 	case serviceLogColNotes:
-		m.openNotesEdit(id, formServiceLog, &values.Notes, values)
+		m.openNotesEdit(id, &values.Notes, values)
 	case serviceLogColID, serviceLogColDocs:
 		return m.startEditServiceLogForm(id)
 	}
@@ -1590,14 +1586,12 @@ func (m *Model) documentEntityOptions() ([]huh.Option[entityRef], error) {
 // When the user picks a date, the form data is saved via the handler.
 func (m *Model) openDatePicker(
 	id uint,
-	kind FormKind,
 	dateField *string,
-	values any,
+	values formData,
 ) {
 	m.fs.editID = &id
-	m.fs.formKind = kind
 	m.fs.formData = values
-	savedKind := kind
+	savedKind := values.formKind()
 	m.openCalendar(dateField, func() {
 		if err := m.handleFormSubmit(); err != nil {
 			m.setStatusError(err.Error())
@@ -1605,7 +1599,6 @@ func (m *Model) openDatePicker(
 			m.setStatusSaved()
 			m.reloadAfterFormSave(savedKind)
 		}
-		m.fs.formKind = formNone
 		m.fs.formData = nil
 		m.fs.editID = nil
 	})
@@ -1620,19 +1613,18 @@ func (m *Model) openDatePicker(
 // equalize group heights one frame late, causing a visible jump; updateForm
 // blocks that deferred message so neither width nor height changes after the
 // initial render.
-func (m *Model) activateForm(kind FormKind, form *huh.Form, values any) {
+func (m *Model) activateForm(form *huh.Form, values formData) {
 	applyFormDefaults(form)
 	// Set form width before Init so groups render at the correct terminal
 	// width immediately. Without this, groups start at the default 80
 	// columns and jump when the deferred WindowSizeMsg arrives.
 	// The house form sets its own narrower width before calling
 	// activateForm, so skip the override for that case.
-	if m.width > 0 && kind != formHouse {
+	if m.width > 0 && values.formKind() != formHouse {
 		form.WithWidth(m.width)
 	}
 	m.prevMode = m.mode
 	m.mode = modeForm
-	m.fs.formKind = kind
 	m.fs.form = form
 	m.fs.formData = values
 	m.fs.formHasRequired = true
@@ -1642,28 +1634,28 @@ func (m *Model) activateForm(kind FormKind, form *huh.Form, values any) {
 
 // openInlineEdit sets up a single-field inline edit form (overlay).
 // Used for Select fields where a list picker is needed.
-func (m *Model) openInlineEdit(id uint, kind FormKind, field huh.Field, values any) {
+func (m *Model) openInlineEdit(id uint, field huh.Field, values formData) {
 	m.fs.editID = &id
-	m.activateForm(kind, huh.NewForm(huh.NewGroup(field)), values)
+	m.activateForm(huh.NewForm(huh.NewGroup(field)), values)
 	m.fs.formHasRequired = false
 }
 
 // openNotesEdit opens a standalone textarea overlay for editing a notes field.
 // On submit the form data is saved via the handler, just like openInlineEdit
 // for select fields. The textarea supports ctrl+e to escalate to $EDITOR.
-func (m *Model) openNotesEdit(id uint, kind FormKind, fieldPtr *string, values any) {
+func (m *Model) openNotesEdit(id uint, fieldPtr *string, values formData) {
 	m.fs.editID = &id
 	m.fs.formData = values
-	m.openNotesTextarea(kind, fieldPtr, values)
+	m.openNotesTextarea(fieldPtr, values)
 }
 
 // openNotesTextarea creates and activates a textarea form for notes editing.
 // Separated from openNotesEdit so it can be reused when reopening after an
 // external editor session.
-func (m *Model) openNotesTextarea(kind FormKind, fieldPtr *string, values any) {
+func (m *Model) openNotesTextarea(fieldPtr *string, values formData) {
 	field := huh.NewText().Title("Notes").Value(fieldPtr)
 	form := huh.NewForm(huh.NewGroup(field))
-	m.activateForm(kind, form, values)
+	m.activateForm(form, values)
 	m.fs.formHasRequired = false
 	m.fs.notesEditMode = true
 	m.fs.notesFieldPtr = fieldPtr
@@ -1673,11 +1665,10 @@ func (m *Model) openNotesTextarea(kind FormKind, fieldPtr *string, values any) {
 // keeping the table visible. Used for simple text and number fields.
 func (m *Model) openInlineInput(
 	id uint,
-	kind FormKind,
 	title, placeholder string,
 	fieldPtr *string,
 	validate func(string) error,
-	values any,
+	values formData,
 ) {
 	ti := textinput.New()
 	ti.SetValue(*fieldPtr)
@@ -1686,13 +1677,11 @@ func (m *Model) openInlineInput(
 	ti.Prompt = ""
 	ti.CharLimit = 256
 	m.fs.editID = &id
-	m.fs.formKind = kind
 	m.fs.formData = values
 	m.inlineInput = &inlineInputState{
 		Input:    ti,
 		Title:    title,
 		EditID:   id,
-		FormKind: kind,
 		FormData: values,
 		FieldPtr: fieldPtr,
 		Validate: validate,
@@ -1766,12 +1755,13 @@ func formKeyMap() *huh.KeyMap {
 }
 
 func (m *Model) handleFormSubmit() error {
-	if m.fs.formKind == formHouse {
+	kind := m.fs.formKind()
+	if kind == formHouse {
 		return m.submitHouseForm()
 	}
-	handler := m.handlerForFormKind(m.fs.formKind)
+	handler := m.handlerForFormKind(kind)
 	if handler == nil {
-		return fmt.Errorf("no handler for form kind %v", m.fs.formKind)
+		return fmt.Errorf("no handler for form kind %v", kind)
 	}
 	return handler.SubmitForm(m)
 }
@@ -2278,7 +2268,7 @@ func (m *Model) createOrUpdate(
 // typed error on mismatch. Eliminates the repeated type-assertion boilerplate
 // in every parse* function.
 func formDataAs[T any](m *Model) (*T, error) {
-	v, ok := m.fs.formData.(*T)
+	v, ok := any(m.fs.formData).(*T)
 	if !ok {
 		var zero T
 		return nil, fmt.Errorf("unexpected form data: want *%T, got %T", zero, m.fs.formData)
@@ -2345,7 +2335,7 @@ func (m *Model) startDocumentForm(entityKind string) error {
 	)
 
 	form := huh.NewForm(huh.NewGroup(fields...))
-	m.activateForm(formDocument, form, values)
+	m.activateForm(form, values)
 	return nil
 }
 
@@ -2360,7 +2350,7 @@ func (m *Model) startQuickDocumentForm() error {
 				Value(&values.FilePath),
 		),
 	)
-	m.activateForm(formDocument, form, values)
+	m.activateForm(form, values)
 	return nil
 }
 
@@ -2405,7 +2395,7 @@ func (m *Model) openEditDocumentForm(values *documentFormData, scoped bool) erro
 	)
 
 	form := huh.NewForm(huh.NewGroup(fields...))
-	m.activateForm(formDocument, form, values)
+	m.activateForm(form, values)
 	return nil
 }
 
@@ -2577,7 +2567,6 @@ func (m *Model) inlineEditDocument(id uint, col documentCol) error {
 	case documentColTitle:
 		m.openInlineInput(
 			id,
-			formDocument,
 			"Title",
 			"",
 			&values.Title,
@@ -2585,7 +2574,7 @@ func (m *Model) inlineEditDocument(id uint, col documentCol) error {
 			values,
 		)
 	case documentColNotes:
-		m.openNotesEdit(id, formDocument, &values.Notes, values)
+		m.openNotesEdit(id, &values.Notes, values)
 	case documentColEntity:
 		entityOpts, err := m.documentEntityOptions()
 		if err != nil {
@@ -2596,7 +2585,7 @@ func (m *Model) inlineEditDocument(id uint, col documentCol) error {
 			Height(10).
 			Options(entityOpts...).
 			Value(&values.EntityRef)
-		m.openInlineEdit(id, formDocument, field, values)
+		m.openInlineEdit(id, field, values)
 	case documentColID, documentColType, documentColSize, documentColUpdated:
 		return m.startEditDocumentForm(id)
 	}

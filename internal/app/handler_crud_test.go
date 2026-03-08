@@ -951,7 +951,6 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 	t.Run("project", func(t *testing.T) {
 		m := newTestModelWithStore(t)
-		m.fs.formKind = formProject
 		m.fs.formData = &projectFormData{
 			Title:         "Deck Build",
 			ProjectTypeID: m.projectTypes[0].ID,
@@ -984,7 +983,6 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 	t.Run("vendor", func(t *testing.T) {
 		m := newTestModelWithStore(t)
-		m.fs.formKind = formVendor
 		m.fs.formData = &vendorFormData{Name: "Test Plumber", Phone: "555-0001"}
 
 		m.saveFormInPlace()
@@ -1007,7 +1005,6 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 	t.Run("appliance", func(t *testing.T) {
 		m := newTestModelWithStore(t)
-		m.fs.formKind = formAppliance
 		m.fs.formData = &applianceFormData{Name: "Dishwasher"}
 
 		m.saveFormInPlace()
@@ -1028,7 +1025,6 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 	t.Run("maintenance", func(t *testing.T) {
 		m := newTestModelWithStore(t)
 		cats, _ := m.store.MaintenanceCategories()
-		m.fs.formKind = formMaintenance
 		m.fs.formData = &maintenanceFormData{
 			Name:         "Change Filter",
 			CategoryID:   cats[0].ID,
@@ -1065,7 +1061,6 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 		}))
 		projects, _ := m.store.ListProjects(false)
 
-		m.fs.formKind = formQuote
 		m.fs.formData = &quoteFormData{
 			ProjectID:  projects[0].ID,
 			VendorName: "QuoteCo",
@@ -1105,7 +1100,6 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 		// wiring detailStack.
 		require.NoError(t, m.openServiceLogDetail(maintID, "HVAC Filter"))
 
-		m.fs.formKind = formServiceLog
 		m.fs.formData = &serviceLogFormData{
 			MaintenanceItemID: maintID,
 			ServicedAt:        "2026-01-15",
@@ -1132,7 +1126,6 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 
 	t.Run("document", func(t *testing.T) {
 		m := newTestModelWithStore(t)
-		m.fs.formKind = formDocument
 		m.fs.formData = &documentFormData{
 			Title:     "Test Doc",
 			EntityRef: entityRef{Kind: data.DocumentEntityProject},
@@ -1170,7 +1163,6 @@ func TestSaveFormInPlaceSetEditID(t *testing.T) {
 		// Use the real project-document detail view.
 		require.NoError(t, m.openProjectDocumentDetail(projID, "Scoped Doc Proj"))
 
-		m.fs.formKind = formDocument
 		m.fs.formData = &documentFormData{
 			Title:     "Permit",
 			EntityRef: entityRef{Kind: data.DocumentEntityProject},

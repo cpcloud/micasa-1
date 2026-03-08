@@ -165,21 +165,20 @@ func TestDatePickerEscClearsFormState(t *testing.T) {
 
 	// Simulate what openDatePicker does: set form state then open calendar.
 	m.fs.editID = &id
-	m.fs.formKind = formMaintenance
-	m.fs.formData = "dummy"
+	m.fs.formData = &maintenanceFormData{}
 	m.openCalendar(&dateVal, nil)
 	require.NotNil(t, m.calendar)
 
 	// Preconditions: form state is set.
 	require.NotNil(t, m.fs.editID)
-	require.Equal(t, formMaintenance, m.fs.formKind)
+	require.Equal(t, formMaintenance, m.fs.formKind())
 	require.NotNil(t, m.fs.formData)
 
 	// Press ESC to cancel.
 	sendKey(m, "esc")
 
 	assert.Nil(t, m.calendar, "calendar should be dismissed")
-	assert.Equal(t, formNone, m.fs.formKind, "formKind should be reset after ESC")
+	assert.Equal(t, formNone, m.fs.formKind(), "formKind should be reset after ESC")
 	assert.Nil(t, m.fs.formData, "formData should be cleared after ESC")
 	assert.Nil(t, m.fs.editID, "editID should be cleared after ESC")
 	assert.Equal(t, testDate, dateVal, "date value should be unchanged on cancel")

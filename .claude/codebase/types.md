@@ -62,9 +62,13 @@ Title, Min/MaxWidth, Flex, Align, Kind (cellKind), Link (FK ref), FixedValues, H
 ### cell (types.go)
 Value string, Kind cellKind, Null bool, LinkID uint
 
+### formData interface (types.go)
+Implemented by all 9 form data structs via formKind() FormKind. Replaces `any`.
+
 ### formState (types.go)
-formKind FormKind, form *huh.Form, formData any, formDirty bool,
+form *huh.Form, formData formData, formSnapshot formData, formDirty bool,
 confirmDiscard/confirmQuit bool, editID uint, notesEditMode bool
+- formKind() method derives FormKind from formData (formNone when nil)
 
 ### detailContext (types.go)
 Parent info (tab, entity, ID), Breadcrumb string, Tab (the detail sub-tab)

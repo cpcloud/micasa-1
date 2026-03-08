@@ -351,7 +351,7 @@ func TestOpenNotesEditOpensTextareaOverlay(t *testing.T) {
 	t.Parallel()
 	m := newTestModel(t)
 	values := &serviceLogFormData{Notes: "existing note"}
-	m.openNotesEdit(1, formServiceLog, &values.Notes, values)
+	m.openNotesEdit(1, &values.Notes, values)
 
 	assert.Equal(t, modeForm, m.mode)
 	assert.True(t, m.fs.notesEditMode)
@@ -365,7 +365,7 @@ func TestNotesEditModeShowsEditorHint(t *testing.T) {
 	t.Parallel()
 	m := newTestModel(t)
 	values := &serviceLogFormData{Notes: "test"}
-	m.openNotesEdit(1, formServiceLog, &values.Notes, values)
+	m.openNotesEdit(1, &values.Notes, values)
 
 	status := m.statusView()
 	assert.Contains(t, status, "CTRL+E")
@@ -375,7 +375,7 @@ func TestNotesEditModeClearedOnExitForm(t *testing.T) {
 	t.Parallel()
 	m := newTestModel(t)
 	values := &serviceLogFormData{Notes: "test"}
-	m.openNotesEdit(1, formServiceLog, &values.Notes, values)
+	m.openNotesEdit(1, &values.Notes, values)
 	require.True(t, m.fs.notesEditMode)
 
 	m.exitForm()
@@ -387,7 +387,7 @@ func TestNotesEditModeClearedOnExitForm(t *testing.T) {
 func TestCtrlEWithoutEditorShowsError(t *testing.T) {
 	m := newTestModel(t)
 	values := &serviceLogFormData{Notes: "test"}
-	m.openNotesEdit(1, formServiceLog, &values.Notes, values)
+	m.openNotesEdit(1, &values.Notes, values)
 
 	// Ensure no editor is set.
 	t.Setenv("EDITOR", "")
@@ -410,7 +410,6 @@ func TestEditorFinishedMsgUpdatesFieldAndReopensTextarea(t *testing.T) {
 
 	m.fs.pendingEditor = &editorState{
 		EditID:   42,
-		FormKind: formServiceLog,
 		FormData: values,
 		FieldPtr: &values.Notes,
 		TempFile: tmpFile,
@@ -435,7 +434,6 @@ func TestEditorFinishedMsgStripsTrailingNewlines(t *testing.T) {
 	require.NoError(t, os.WriteFile(tmpFile, []byte("line one\nline two\n\n\n"), 0o600))
 
 	m.fs.pendingEditor = &editorState{
-		FormKind: formServiceLog,
 		FormData: values,
 		FieldPtr: &values.Notes,
 		TempFile: tmpFile,
@@ -455,7 +453,6 @@ func TestEditorFinishedWithErrorReopensTextarea(t *testing.T) {
 	require.NoError(t, os.WriteFile(tmpFile, []byte("original"), 0o600))
 
 	m.fs.pendingEditor = &editorState{
-		FormKind: formServiceLog,
 		FormData: values,
 		FieldPtr: &values.Notes,
 		TempFile: tmpFile,
@@ -503,10 +500,10 @@ func TestDocumentNotesSaveDoesNotTriggerExtraction(t *testing.T) {
 	t.Parallel()
 	m := newTestModel(t)
 	values := &documentFormData{Notes: "original note"}
-	m.openNotesEdit(1, formDocument, &values.Notes, values)
+	m.openNotesEdit(1, &values.Notes, values)
 
 	require.True(t, m.fs.notesEditMode)
-	require.Equal(t, formDocument, m.fs.formKind)
+	require.Equal(t, formDocument, m.fs.formKind())
 
 	cmd := m.saveFormInPlace()
 
