@@ -59,7 +59,7 @@ func extractPDF(ctx context.Context, data []byte) (string, error) {
 	defer os.RemoveAll(tmpDir) //nolint:errcheck // best-effort cleanup
 
 	pdfPath := filepath.Join(tmpDir, "input.pdf")
-	if err := os.WriteFile(pdfPath, data, 0o600); err != nil {
+	if err := os.WriteFile(pdfPath, data, 0o600); err != nil { //nolint:gosec // path is tmpDir + constant filename
 		return "", fmt.Errorf("write temp pdf: %w", err)
 	}
 

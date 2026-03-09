@@ -26,6 +26,7 @@ func newExtractionModel(t *testing.T, steps map[extractionStep]stepStatus) *Mode
 
 	m := newTestModel(t)
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	ex := &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		ctx:        ctx,
@@ -913,6 +914,7 @@ func TestForeground_SwapsCurrentToBackground(t *testing.T) {
 
 	// Create a new foreground extraction.
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	m.ex.extraction = &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		Filename:   "second.pdf",
@@ -1051,6 +1053,7 @@ func TestMultipleBgExtractions(t *testing.T) {
 
 	// Create and background second.
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	m.ex.extraction = &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		Filename:   "b.pdf",
@@ -1088,6 +1091,7 @@ func TestStartExtraction_AutoBackgroundsExisting(t *testing.T) {
 	// This tests the backgrounding logic directly.
 	m.backgroundExtraction()
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	m.ex.extraction = &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		Filename:   "new.pdf",
@@ -1134,6 +1138,7 @@ func TestCtrlQ_CancelsAllBgExtractions(t *testing.T) {
 
 	// Create another foreground extraction.
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	m.ex.extraction = &extractionLogState{
 		ID:         nextExtractionID.Add(1),
 		Filename:   "fg2.pdf",
@@ -1817,6 +1822,7 @@ func TestDispatch_VendorCrossReference(t *testing.T) {
 	require.NoError(t, sdb.Stage(ops))
 
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	defer cancel()
 	ex := &extractionLogState{
 		ID:         nextExtractionID.Add(1),
@@ -1885,6 +1891,7 @@ func TestDispatch_InvalidProjectIDShowsError(t *testing.T) {
 	require.NoError(t, sdb.Stage(ops))
 
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	defer cancel()
 	ex := &extractionLogState{
 		ID:         nextExtractionID.Add(1),
@@ -1950,6 +1957,7 @@ func TestDispatch_OffsetCrossReference(t *testing.T) {
 	require.NoError(t, sdb.Stage(ops))
 
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	defer cancel()
 	ex := &extractionLogState{
 		ID:         nextExtractionID.Add(1),
@@ -2032,6 +2040,7 @@ func TestDispatch_DuplicateVendorDedup(t *testing.T) {
 	require.NoError(t, sdb.Stage(ops))
 
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	defer cancel()
 	ex := &extractionLogState{
 		ID:         nextExtractionID.Add(1),
@@ -2102,6 +2111,7 @@ func TestDispatch_DuplicateApplianceDedup(t *testing.T) {
 	require.NoError(t, sdb.Stage(ops))
 
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	defer cancel()
 	ex := &extractionLogState{
 		ID:         nextExtractionID.Add(1),
@@ -2163,6 +2173,7 @@ func TestDispatch_TransactionRollbackOnFailure(t *testing.T) {
 	require.NoError(t, sdb.Stage(ops))
 
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	defer cancel()
 	ex := &extractionLogState{
 		ID:         nextExtractionID.Add(1),

@@ -120,7 +120,9 @@ func TestCancellationDuringSQLGeneration(t *testing.T) {
 	m := newTestModel(t)
 	m.openChat()
 
-	_, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	_ = ctx // only the cancel func is needed; ctx is cleaned up via t.Cleanup
 	m.chat.CurrentQuery = testQuestion
 	m.chat.Streaming = true
 	m.chat.StreamingSQL = true
@@ -150,7 +152,9 @@ func TestCancellationDuringAnswerStreaming(t *testing.T) {
 	m := newTestModel(t)
 	m.openChat()
 
-	_, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	_ = ctx
 	m.chat.CurrentQuery = testQuestion
 	m.chat.Streaming = true
 	m.chat.StreamingSQL = false // stage 2
@@ -240,6 +244,7 @@ func TestNoSpinnerAfterCancellation(t *testing.T) {
 	m.openChat()
 
 	_, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	m.chat.Streaming = true
 	m.chat.StreamingSQL = true
 	m.chat.CancelFn = cancel
@@ -274,6 +279,7 @@ func TestLateSQLChunkAfterCancellationIsDropped(t *testing.T) {
 	m.openChat()
 
 	_, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	m.chat.Streaming = true
 	m.chat.StreamingSQL = true
 	m.chat.CancelFn = cancel
@@ -310,6 +316,7 @@ func TestLateChatChunkAfterCancellationIsDropped(t *testing.T) {
 	m.openChat()
 
 	_, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	m.chat.Streaming = true
 	m.chat.CancelFn = cancel
 	m.chat.Messages = []chatMessage{

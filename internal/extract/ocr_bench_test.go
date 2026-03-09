@@ -44,7 +44,7 @@ func BenchmarkOcrPage(b *testing.B) {
 
 	tmpDir := b.TempDir()
 	pdfPath := filepath.Join(tmpDir, "input.pdf")
-	if err := os.WriteFile(pdfPath, data, 0o600); err != nil {
+	if err := os.WriteFile(pdfPath, data, 0o600); err != nil { //nolint:gosec // path is tmpDir + constant filename
 		b.Fatal(err)
 	}
 
