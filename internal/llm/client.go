@@ -26,7 +26,7 @@ import (
 )
 
 // QuickOpTimeout is the context deadline for fast LLM server operations
-// (ping, model listing, auto-detect). Not configurable.
+// (ping, model listing, auto-detect). Not user-configurable.
 const QuickOpTimeout = 30 * time.Second
 
 // Client wraps an any-llm-go provider behind a stable API for the rest
@@ -82,8 +82,10 @@ var localProviders = map[string]bool{
 	"llamafile":    true,
 }
 
-// NewClient creates an LLM client for the named provider. Returns an error
-// if the provider cannot be initialized.
+// NewClient creates an LLM client for the named provider. The timeout is the
+// inference context deadline for this pipeline. The HTTP client timeout is
+// derived as max(timeout, QuickOpTimeout) to ensure quick operations don't
+// get killed by a short inference timeout.
 func NewClient(
 	providerName, baseURL, model, apiKey string,
 	timeout time.Duration,
@@ -95,7 +97,8 @@ func NewClient(
 		effectiveBase = ""
 	}
 
-	opts := buildOpts(effectiveBase, apiKey, timeout)
+	httpTimeout := max(timeout, QuickOpTimeout)
+	opts := buildOpts(effectiveBase, apiKey, httpTimeout)
 	p, err := createProvider(providerName, opts)
 	if err != nil {
 		return nil, fmt.Errorf("create %s provider: %w", providerName, err)
@@ -374,7 +377,8 @@ func (c *Client) wrapError(err error) error {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf(
 			"%s timed out -- the server may be overloaded or the model is too slow; "+
-				"increase llm.timeout or try a smaller model",
+				"check timeout settings (llm.timeout, llm.chat.timeout, llm.extraction.timeout) "+
+				"or try a smaller model",
 			c.providerName,
 		)
 	}

@@ -492,8 +492,9 @@ func (m *Model) llmPingCmd(state *extractionLogState) tea.Cmd {
 		return nil
 	}
 	id := state.ID
+	quickOpTimeout := client.Timeout()
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), llm.QuickOpTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), quickOpTimeout)
 		defer cancel()
 		err := client.Ping(ctx)
 		return extractionLLMPingMsg{ID: id, Err: err}
@@ -508,7 +509,7 @@ func (m *Model) llmExtractCmd(ctx context.Context, ex *extractionLogState) tea.C
 	}
 	schemaCtx := m.buildSchemaContext()
 	id := ex.ID
-	timeout := m.ex.llmInferenceTimeout
+	timeout := m.ex.extractionTimeout
 	return func() tea.Msg {
 		llmCtx := ctx
 		if timeout > 0 {
@@ -743,7 +744,7 @@ func (m *Model) handleExtractionLLMChunk(msg extractionLLMChunkMsg) tea.Cmd {
 		errMsg := msg.Err.Error()
 		if errors.Is(msg.Err, context.DeadlineExceeded) {
 			errMsg = fmt.Sprintf(
-				"timed out after %s -- increase extraction.llm_timeout in config",
+				"timed out after %s -- increase llm.extraction.timeout in config",
 				step.Elapsed.Truncate(time.Second),
 			)
 		}

@@ -66,9 +66,9 @@ type LLM struct {
 	// Currency is handled by [locale] section. Optional; defaults to empty.
 	ExtraContext string `toml:"extra_context"`
 
-	// Timeout is the maximum time for a single LLM response (including
+	// Timeout is the base inference timeout for LLM responses (including
 	// streaming). Go duration string, e.g. "5m", "10m". Default: "5m".
-	// Quick operations (ping, model listing) use a shorter fixed deadline.
+	// Per-pipeline overrides: llm.chat.timeout and llm.extraction.timeout.
 	Timeout string `toml:"timeout" default:"5m"`
 
 	// Thinking controls the model's reasoning effort level. Supported values:
@@ -114,7 +114,7 @@ type ResolvedLLM struct {
 	Model        string
 	APIKey       string //nolint:gosec // resolved config field, not a hardcoded credential
 	ExtraContext string
-	Timeout      time.Duration
+	Timeout      time.Duration // inference context deadline for this pipeline
 	Thinking     string
 }
 
@@ -965,12 +965,23 @@ func migrateRenamedKeys(cfg *Config, md toml.MetaData, path string) {
 			"extraction.thinking is deprecated -- use llm.extraction.thinking instead",
 		)
 	}
+
+	// extraction.llm_timeout -> llm.extraction.timeout (v1.80)
+	if md.IsDefined("extraction", "llm_timeout") && !md.IsDefined("llm", "extraction", "timeout") {
+		cfg.LLM.Extraction.Timeout = cfg.Extraction.LLMTimeout
+		cfg.Warnings = append(cfg.Warnings,
+			"extraction.llm_timeout is deprecated -- use llm.extraction.timeout instead",
+		)
+	}
 }
 
 // envRenames maps deprecated environment variable names to their canonical
 // replacements. Processed newest-first so that the most recent intermediate
 // name wins when multiple generations of the same variable are set.
 var envRenames = []struct{ old, canonical string }{
+	// v1.80: extraction.llm_timeout -> llm.extraction.timeout.
+	{"MICASA_EXTRACTION_LLM_TIMEOUT", "MICASA_LLM_EXTRACTION_TIMEOUT"},
+
 	// v1.78: extraction.enabled -> extraction.enable.
 	{"MICASA_EXTRACTION_ENABLED", "MICASA_EXTRACTION_ENABLE"},
 
@@ -1105,9 +1116,9 @@ model = "` + DefaultModel + `"
 # Use this to inject domain-specific details about your house, region, etc.
 # extra_context = "My house is a 1920s craftsman in Portland, OR."
 
-# Maximum time for a single LLM response (including streaming).
+# Base inference timeout for LLM responses (including streaming).
 # Go duration syntax: "5m", "10m", etc. Default: "5m".
-# Increase for very slow models or complex queries.
+# Per-pipeline overrides: llm.chat.timeout and llm.extraction.timeout.
 # timeout = "5m"
 
 # Model reasoning effort level. Supported: none, low, medium, high, auto.
@@ -1121,7 +1132,7 @@ model = "` + DefaultModel + `"
 # base_url = "https://api.anthropic.com"
 # model = "claude-sonnet-4-5-20250929"
 # api_key = "sk-ant-..."
-# timeout = "10s"
+# timeout = "5m"     # inference context deadline (default: 5m)
 # thinking = "medium"
 
 # [llm.extraction]
@@ -1131,7 +1142,7 @@ model = "` + DefaultModel + `"
 # base_url = "https://api.anthropic.com"
 # model = "claude-haiku-3-5-20241022"
 # api_key = "sk-ant-..."
-# timeout = "15s"
+# timeout = "5m"     # inference context deadline (default: 5m)
 # thinking = "low"
 
 [documents]
@@ -1153,8 +1164,7 @@ model = "` + DefaultModel + `"
 # still run (see [extraction.ocr]) to populate document text for search/display.
 # enable = true
 
-# Timeout for LLM extraction inference. Go duration syntax: "5m", "90s", etc.
-# Default: "5m". Increase for slow local models or complex documents.
+# Deprecated: use [llm.extraction] timeout instead.
 # llm_timeout = "5m"
 
 # Maximum pages for async extraction of scanned documents. 0 = no limit. Default: 0.

@@ -1016,7 +1016,7 @@ func TestLLMExtraction_TimeoutError(t *testing.T) {
 	assert.Equal(t, stepFailed, step.Status)
 	require.NotEmpty(t, step.Logs)
 	assert.Contains(t, step.Logs[0], "timed out")
-	assert.Contains(t, step.Logs[0], "extraction.llm_timeout")
+	assert.Contains(t, step.Logs[0], "llm.extraction.timeout")
 }
 
 func TestLLMExtraction_TimeoutError_NonDeadlinePreservesOriginal(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/cpcloud/micasa/internal/config"
 	"github.com/cpcloud/micasa/internal/data"
 	"github.com/cpcloud/micasa/internal/llm"
 	ollamaPull "github.com/cpcloud/micasa/internal/ollama"
@@ -318,11 +319,20 @@ func (m *Model) submitChat() tea.Cmd {
 	return tea.Batch(m.startSQLStream(query), m.chat.Spinner.Tick)
 }
 
+// chatInferenceTimeout returns the configured chat inference timeout.
+func (m *Model) chatInferenceTimeout() time.Duration {
+	if m.llmConfig != nil && m.llmConfig.Timeout > 0 {
+		return m.llmConfig.Timeout
+	}
+	return config.DefaultLLMTimeout
+}
+
 // startSQLStream initiates streaming SQL generation (stage 1).
 func (m *Model) startSQLStream(query string) tea.Cmd {
 	client := m.llmClient
 	store := m.store
 	extraContext := m.llmExtraContext
+	chatTimeout := m.chatInferenceTimeout()
 	// Capture conversation history on the main goroutine before the closure
 	// runs in a background goroutine -- m.chat.Messages is mutated by the
 	// Bubble Tea event loop and is not safe to read concurrently.
@@ -346,8 +356,8 @@ func (m *Model) startSQLStream(query string) tea.Cmd {
 		messages = append(messages, llm.Message{Role: roleUser, Content: query})
 
 		//nolint:gosec // cancel stored in CancelFn, called on ctrl+c
-		ctx, cancel := context.WithCancel(
-			context.Background(),
+		ctx, cancel := context.WithTimeout(
+			context.Background(), chatTimeout,
 		)
 		streamCh, err := client.ChatStream(ctx, messages)
 		if err != nil {
@@ -763,7 +773,7 @@ func (m *Model) handleSQLResult(msg sqlResultMsg) tea.Cmd {
 		{Role: roleUser, Content: "Summarize these results."},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), m.chatInferenceTimeout())
 	ch, err := m.llmClient.ChatStream(ctx, messages)
 	if err != nil {
 		cancel()
@@ -788,7 +798,7 @@ func (m *Model) handleSQLResult(msg sqlResultMsg) tea.Cmd {
 func (m *Model) startFallbackStream(question string) tea.Cmd {
 	messages := m.buildFallbackMessages(question)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), m.chatInferenceTimeout())
 	ch, err := m.llmClient.ChatStream(ctx, messages)
 	if err != nil {
 		cancel()

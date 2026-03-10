@@ -111,7 +111,7 @@ You can always infer the env var name from the config key.
 | `MICASA_LLM_MODEL` | `qwen3` | `llm.model` | LLM model name |
 | `MICASA_LLM_API_KEY` | (empty) | `llm.api_key` | LLM API key for cloud providers |
 | `MICASA_LLM_EXTRA_CONTEXT` | (empty) | `llm.extra_context` | Custom context appended to LLM system prompts |
-| `MICASA_LLM_TIMEOUT` | `5m` | `llm.timeout` | Max time for a single LLM response |
+| `MICASA_LLM_TIMEOUT` | `5m` | `llm.timeout` | Base inference timeout for LLM responses |
 | `MICASA_LLM_THINKING` | (unset) | `llm.thinking` | Enable model thinking for chat |
 | `MICASA_DOCUMENTS_MAX_FILE_SIZE` | `50 MiB` | `documents.max_file_size` | Max document import size |
 | `MICASA_DOCUMENTS_CACHE_TTL` | `30d` | `documents.cache_ttl` | Document cache lifetime |
@@ -121,7 +121,7 @@ You can always infer the env var name from the config key.
 | `MICASA_EXTRACTION_ENABLE` | `true` | `extraction.enable` | Enable/disable LLM extraction |
 | `MICASA_EXTRACTION_THINKING` | `false` | `extraction.thinking` | Enable model thinking for extraction |
 | `MICASA_EXTRACTION_MAX_PAGES` | `0` | `extraction.max_pages` | Max pages to OCR per document (0 = no limit) |
-| `MICASA_EXTRACTION_LLM_TIMEOUT` | `5m` | `extraction.llm_timeout` | LLM extraction timeout |
+| `MICASA_LLM_EXTRACTION_TIMEOUT` | `5m` | `llm.extraction.timeout` | Extraction inference timeout |
 | `MICASA_EXTRACTION_OCR_ENABLE` | `true` | `extraction.ocr.enable` | Enable/disable OCR on documents |
 | `MICASA_EXTRACTION_OCR_CONFIDENCE_THRESHOLD` | `0` | `extraction.ocr.confidence_threshold` | Min tesseract confidence (0-100) |
 | `MICASA_LOCALE_CURRENCY` | (auto-detect) | `locale.currency` | ISO 4217 currency code (e.g. `USD`, `EUR`, `GBP`) |
@@ -144,6 +144,7 @@ warning. They will be removed in a future release.
 | `MICASA_EXTRACTION_ENABLED` | `MICASA_EXTRACTION_ENABLE` |
 | `MICASA_EXTRACTION_MODEL` | `MICASA_LLM_EXTRACTION_MODEL` |
 | `MICASA_EXTRACTION_THINKING` | `MICASA_LLM_EXTRACTION_THINKING` |
+| `MICASA_EXTRACTION_LLM_TIMEOUT` | `MICASA_LLM_EXTRACTION_TIMEOUT` |
 
 {{% /details %}}
 
@@ -279,9 +280,9 @@ model = "qwen3"
 # Use this to inject domain-specific details about your house, region, etc.
 # extra_context = "My house is a 1920s craftsman in Portland, OR."
 
-# Max time for a single LLM response (including streaming).
+# Base inference timeout for LLM responses (including streaming).
+# Per-pipeline overrides: llm.chat.timeout and llm.extraction.timeout.
 # Go duration syntax: "5m", "10m", etc. Default: "5m".
-# Increase for slow models or complex queries.
 # timeout = "5m"
 
 # Enable model thinking mode for chat (e.g. qwen3 <think> blocks).
@@ -335,7 +336,7 @@ set in `[llm.chat]` and `[llm.extraction]`.
 | `model` | string | `qwen3` | Model identifier sent in chat requests. Must be available on the server. |
 | `api_key` | string | (empty) | Authentication credential. Required for cloud providers (Anthropic, OpenAI, etc.). Leave empty for local servers. |
 | `extra_context` | string | (empty) | Free-form text appended to all LLM system prompts. Useful for telling the model about your house or regional conventions. Currency is handled automatically via `[locale]`. |
-| `timeout` | string | `"5m"` | Max time for a single LLM response (including streaming). Go duration syntax, e.g. `"10m"`. Increase for slow models. |
+| `timeout` | string | `"5m"` | Base inference timeout for LLM responses (including streaming). Per-pipeline overrides: `llm.chat.timeout` and `llm.extraction.timeout`. Go duration syntax, e.g. `"10m"`. |
 | `thinking` | bool | (unset) | Enable model thinking mode (e.g. qwen3 `<think>` blocks). Unset = don't send the option (server default). |
 
 ### `[llm.chat]` section
@@ -350,14 +351,15 @@ than the default.
 | `base_url` | string | (inherits) | Override API base URL for chat. |
 | `model` | string | (inherits) | Override model for chat. |
 | `api_key` | string | (inherits) | Override API key for chat. |
-| `timeout` | string | (inherits) | Override timeout for chat. |
+| `timeout` | string | (inherits) | Chat inference context deadline. Inherits from `llm.timeout` when not set. |
 | `thinking` | string | (inherits) | Override thinking mode for chat. |
 
 ### `[llm.extraction]` section
 
 Per-pipeline LLM overrides for document extraction. Empty fields inherit
 from `[llm]`. Use this to run extraction on a smaller, faster model while
-keeping a more capable model for chat.
+keeping a more capable model for chat. The `timeout` field replaces the
+deprecated `extraction.llm_timeout`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -365,7 +367,7 @@ keeping a more capable model for chat.
 | `base_url` | string | (inherits) | Override API base URL for extraction. |
 | `model` | string | (inherits) | Override model for extraction. |
 | `api_key` | string | (inherits) | Override API key for extraction. |
-| `timeout` | string | (inherits) | Override timeout for extraction. |
+| `timeout` | string | (inherits) | Extraction inference context deadline. Replaces `extraction.llm_timeout`. Inherits from `llm.timeout` when not set. |
 | `thinking` | string | (inherits) | Override thinking mode for extraction. |
 
 ### `[documents]` section
@@ -391,6 +393,7 @@ dates, vendor matching) from uploaded documents.
 | `max_pages` | int | `0` | Maximum pages to OCR per scanned document. 0 means no limit. |
 | `enable` | bool | `true` | Set to `false` to disable LLM-powered structured extraction. OCR and pdftotext still run (see `[extraction.ocr]`). |
 | `enabled` | bool | -- | **Deprecated.** Use `enable` instead. |
+| `llm_timeout` | string | `"5m"` | **Deprecated.** Use `[llm.extraction] timeout` instead. |
 | `thinking` | bool | `false` | **Deprecated.** Use `[llm.extraction] thinking` instead. |
 
 ### `[extraction.ocr]` section

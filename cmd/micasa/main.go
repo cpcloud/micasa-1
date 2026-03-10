@@ -173,7 +173,6 @@ func (cmd *runCmd) Run() error {
 		exCfg.Thinking,
 		extractors,
 		cfg.Extraction.IsEnabled(),
-		cfg.Extraction.LLMTimeoutDuration(),
 		cfg.Extraction.IsOCRTSV(),
 		cfg.Extraction.OCRConfThreshold(),
 	)
