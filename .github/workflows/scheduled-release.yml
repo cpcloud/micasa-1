@@ -1,0 +1,71 @@
+# Copyright 2026 Phillip Cloud
+# Licensed under the Apache License, Version 2.0
+
+name: Scheduled Release
+
+on:
+  schedule:
+    - cron: "0 14 * * 0" # Sundays at 2pm UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: scheduled-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: write
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Verify HEAD passed required checks
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          sha="${{ github.sha }}"
+
+          # Fetch required check names from the branch ruleset
+          required=$(gh api "repos/${{ github.repository }}/rules/branches/main" \
+            --jq '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context] |
+              if length == 0 then "::error::No required status checks found for main. Aborting release." | halt_error(1)
+              else . end')
+
+          # Fetch all check runs for HEAD once, then verify each required check
+          gh api "repos/${{ github.repository }}/commits/$sha/check-runs" \
+            --jq '.check_runs | group_by(.name) | map(sort_by(.completed_at) | last | {name, conclusion})' \
+          | jq --argjson required "$required" -e '
+            ($required - [.[].name]) as $missing |
+            if ($missing | length) > 0 then
+              "::error::Missing checks for \($missing | join(", "))" | halt_error(1)
+            else . end |
+            map(select(.name as $n | $required | index($n))) |
+            map(select(.conclusion != "success")) |
+            if length > 0 then
+              map("::error::\(.name) is \(.conclusion // "none"), expected success") | .[] | halt_error(1)
+            else true end'
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Run semantic-release
+        run: bash ci/release/run.bash
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
