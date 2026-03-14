@@ -22,6 +22,7 @@ var defaultStyle = appStyles.Base()
 const (
 	linkArrow                 = "→"   // FK link to another tab
 	drilldownArrow            = "↘"   // opens a detail sub-table
+	opsArrow                  = "{}"  // opens the JSON tree viewer
 	breadcrumbSep             = " › " // delimiter used in breadcrumb strings
 	filterMarkActive          = "▼"   // filled down: active filter, normal
 	filterMarkActiveInverted  = "▲"   // filled up: active filter, inverted
@@ -94,6 +95,8 @@ func renderHeaderRow(
 			title = title + " " + appStyles.LinkIndicator().Render(linkArrow)
 		} else if spec.Kind == cellDrilldown {
 			title = title + " " + appStyles.LinkIndicator().Render(drilldownArrow)
+		} else if spec.Kind == cellOps {
+			title = title + " " + appStyles.LinkIndicator().Render(opsArrow)
 		}
 		// Scroll arrows embedded in edge column headers.
 		if i == 0 && hasLeft {
@@ -286,6 +289,8 @@ func headerTitleWidth(spec columnSpec, columnCount int, currencySymbol string) i
 		w += 1 + lipgloss.Width(linkArrow) // " →"
 	} else if spec.Kind == cellDrilldown {
 		w += 1 + lipgloss.Width(drilldownArrow) // " ↘"
+	} else if spec.Kind == cellOps {
+		w += 1 + lipgloss.Width(opsArrow) // " {}"
 	} else if spec.Kind == cellMoney {
 		w += 1 + lipgloss.Width(currencySymbol) // " $" / " €" / " £"
 	}
@@ -522,9 +527,9 @@ func renderCell(
 	} else if value == "" {
 		value = symEmDash
 		style = appStyles.Empty()
-	} else if cellValue.Kind == cellDrilldown && value != "0" {
+	} else if (cellValue.Kind == cellDrilldown || cellValue.Kind == cellOps) && value != "0" {
 		return renderPillCell(value, width, hl, deleted, dimmed)
-	} else if cellValue.Kind == cellDrilldown {
+	} else if cellValue.Kind == cellDrilldown || cellValue.Kind == cellOps {
 		// Zero count: dim instead of pill to keep the grid quiet.
 		style = appStyles.Empty()
 	} else if cellValue.Kind == cellStatus {
@@ -677,7 +682,7 @@ func cellStyle(kind cellKind) lipgloss.Style {
 		return appStyles.Money()
 	case cellReadonly:
 		return appStyles.Readonly()
-	case cellDrilldown:
+	case cellDrilldown, cellOps:
 		return appStyles.Drilldown()
 	default:
 		return defaultStyle

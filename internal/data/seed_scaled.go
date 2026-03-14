@@ -5,6 +5,7 @@ package data
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -611,6 +612,7 @@ func seedBaseDocuments(
 			SizeBytes:      int64(len(content)),
 			ChecksumSHA256: fmt.Sprintf("%x", sha256.Sum256(content)),
 			Data:           content,
+			ExtractionOps:  demoOpsForTemplate(ds.title),
 		})
 	}
 	return docs
@@ -652,6 +654,7 @@ func randomDocument(
 		SizeBytes:      int64(len(content)),
 		ChecksumSHA256: fmt.Sprintf("%x", sha256.Sum256(content)),
 		Data:           content,
+		ExtractionOps:  demoOpsForTemplate(tmpl.title),
 	}
 
 	// Link to a random entity type.
@@ -684,4 +687,97 @@ func randomDocument(
 	}
 
 	return doc
+}
+
+// demoOp is a JSON-serializable extraction operation (mirrors extract.Operation
+// without importing the extract package to avoid an import cycle).
+type demoOp struct {
+	Action string         `json:"action"`
+	Table  string         `json:"table"`
+	Data   map[string]any `json:"data"`
+}
+
+// demoExtractionOps returns pre-built extraction ops JSON for common document
+// types used in the simple and scaled seed data.
+func demoExtractionOps(docType string) []byte {
+	var ops []demoOp
+	switch docType {
+	case "invoice":
+		ops = []demoOp{
+			{Action: "create", Table: TableVendors, Data: map[string]any{
+				"name": "Garcia Plumbing", "email": "info@garcia.com", "phone": "555-0142",
+			}},
+			{Action: "create", Table: TableQuotes, Data: map[string]any{
+				"total_cents": 28500, "notes": "Kitchen faucet replacement",
+			}},
+			{Action: "update", Table: TableDocuments, Data: map[string]any{
+				"title": "Invoice #1047",
+			}},
+		}
+	case "contract":
+		ops = []demoOp{
+			{Action: "create", Table: TableVendors, Data: map[string]any{
+				"name": "Summit Roofing Co", "email": "bids@summitroofing.com",
+			}},
+			{Action: "create", Table: TableQuotes, Data: map[string]any{
+				"total_cents": 875000, "labor_cents": 450000, "materials_cents": 425000,
+			}},
+			{Action: "update", Table: TableDocuments, Data: map[string]any{
+				"title": "Roofing Contract 2026",
+			}},
+		}
+	case "estimate":
+		ops = []demoOp{
+			{Action: "create", Table: TableVendors, Data: map[string]any{
+				"name": "Bright Electric", "phone": "555-0198",
+			}},
+			{Action: "create", Table: TableQuotes, Data: map[string]any{
+				"total_cents": 165000, "notes": "Panel upgrade to 200A",
+			}},
+		}
+	case "receipt":
+		ops = []demoOp{
+			{Action: "create", Table: TableVendors, Data: map[string]any{
+				"name": "Home Depot", "phone": "555-0100",
+			}},
+			{Action: "update", Table: TableDocuments, Data: map[string]any{
+				"title": "Receipt - Lumber & Hardware",
+			}},
+		}
+	case "inspection":
+		ops = []demoOp{
+			{Action: "create", Table: TableMaintenanceItems, Data: map[string]any{
+				"name": "HVAC inspection", "notes": "Annual inspection passed",
+			}},
+			{Action: "update", Table: TableDocuments, Data: map[string]any{
+				"title": "HVAC Inspection Report",
+			}},
+		}
+	default:
+		return nil
+	}
+	b, err := json.Marshal(ops)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+// demoOpsForTemplate returns extraction ops for a document template title,
+// or nil if the document type doesn't typically produce extraction results.
+func demoOpsForTemplate(title string) []byte {
+	switch title {
+	case "Invoice":
+		return demoExtractionOps("invoice")
+	case "Receipt":
+		return demoExtractionOps("receipt")
+	case "Contract":
+		return demoExtractionOps("contract")
+	case "Estimate":
+		return demoExtractionOps("estimate")
+	case "Inspection Report":
+		return demoExtractionOps("inspection")
+	default:
+		return nil
+	}
 }

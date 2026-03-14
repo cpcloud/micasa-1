@@ -29,7 +29,7 @@ func magFormat(c cell, includeUnit bool, currencySymbol string) string {
 	// cellText is excluded because it covers phone numbers, serial numbers,
 	// model numbers, and other identifiers that happen to look numeric.
 	switch c.Kind {
-	case cellMoney, cellDrilldown:
+	case cellMoney, cellDrilldown, cellOps:
 		// Definitely numeric; continue to parsing below.
 	default:
 		return value

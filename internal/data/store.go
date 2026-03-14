@@ -563,16 +563,26 @@ func (s *Store) SeedDemoDataFrom(h *fake.HomeFaker) error {
 	type docSeed struct {
 		title, fileName, mime, kind string
 		entityID                    uint
+		ops                         []byte // pre-built extraction ops JSON
 	}
 	docSeeds := []docSeed{
-		{"Invoice", "invoice.pdf", "application/pdf", DocumentEntityProject, projects[0].ID},
-		{"Contract", "contract.pdf", "application/pdf", DocumentEntityProject, projects[1].ID},
+		{
+			"Invoice", "invoice.pdf", "application/pdf",
+			DocumentEntityProject, projects[0].ID,
+			demoExtractionOps("invoice"),
+		},
+		{
+			"Contract", "contract.pdf", "application/pdf",
+			DocumentEntityProject, projects[1].ID,
+			demoExtractionOps("contract"),
+		},
 		{
 			"Warranty Card",
 			"warranty-card.jpg",
 			"image/jpeg",
 			DocumentEntityAppliance,
 			appliances[0].ID,
+			nil,
 		},
 		{
 			"User Manual",
@@ -580,6 +590,7 @@ func (s *Store) SeedDemoDataFrom(h *fake.HomeFaker) error {
 			"application/pdf",
 			DocumentEntityAppliance,
 			appliances[1].ID,
+			nil,
 		},
 		{
 			"Incident Photo",
@@ -587,6 +598,7 @@ func (s *Store) SeedDemoDataFrom(h *fake.HomeFaker) error {
 			"image/jpeg",
 			DocumentEntityIncident,
 			incidents[0].ID,
+			nil,
 		},
 	}
 	for _, ds := range docSeeds {
@@ -601,6 +613,7 @@ func (s *Store) SeedDemoDataFrom(h *fake.HomeFaker) error {
 			SizeBytes:      int64(len(content)),
 			ChecksumSHA256: fmt.Sprintf("%x", sha256.Sum256(content)),
 			Data:           content,
+			ExtractionOps:  ds.ops,
 		}
 		if err := s.db.Create(&doc).Error; err != nil {
 			return fmt.Errorf("seed document %s: %w", ds.title, err)
@@ -1157,6 +1170,7 @@ func (s *Store) CountIncidentsByVendor(vendorIDs []uint) (map[uint]int, error) {
 var listDocumentColumns = []string{
 	ColID, ColTitle, ColFileName, ColEntityKind, ColEntityID,
 	ColMIMEType, ColSizeBytes, ColChecksumSHA256, ColExtractionModel,
+	ColExtractionOps,
 	ColNotes, ColCreatedAt, ColUpdatedAt, ColDeletedAt,
 }
 

@@ -259,6 +259,21 @@ func (m *Model) handleOverlayClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Ops tree node clicks: toggle expand/collapse.
+	if tree := m.opsTree; tree != nil {
+		nodes := tree.visibleNodes()
+		for i := range nodes {
+			if m.zones.Get(fmt.Sprintf("%s%d", zoneOpsNode, i)).InBounds(msg) {
+				tree.cursor = i
+				if nodes[i].isExpandable() {
+					tree.expanded[nodes[i].path] = !tree.expanded[nodes[i].path]
+					tree.clampCursor()
+				}
+				return m, nil
+			}
+		}
+	}
+
 	// Extraction preview clicks: tab switch, row select, column select.
 	if ex := m.ex.extraction; ex != nil && ex.Visible && ex.exploring {
 		for i := range ex.previewGroups {
@@ -374,6 +389,8 @@ func (m *Model) dismissActiveOverlay() {
 		m.helpViewport = nil
 	case m.notePreview != nil:
 		m.notePreview = nil
+	case m.opsTree != nil:
+		m.opsTree = nil
 	case m.columnFinder != nil:
 		m.columnFinder = nil
 	case m.docSearch != nil:

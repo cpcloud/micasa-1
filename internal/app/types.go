@@ -362,6 +362,7 @@ const (
 	cellUrgency   // date colored by proximity (green -> yellow -> red)
 	cellNotes     // text that can be expanded in a read-only overlay
 	cellEntity    // entity ref with colored kind-letter prefix
+	cellOps       // extraction ops count; opens tree overlay on enter
 )
 
 type cell struct {

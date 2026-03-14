@@ -4,7 +4,9 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -647,6 +649,19 @@ func buildEntityNameMap(store *data.Store) entityNameMap {
 	return names
 }
 
+// opsCell returns a cell for the Ops column, showing the count of extraction
+// operations stored in the document's ExtractionOps JSON blob.
+func opsCell(raw []byte) cell {
+	if len(raw) == 0 {
+		return cell{Kind: cellOps}
+	}
+	var arr []any
+	if err := json.Unmarshal(raw, &arr); err != nil || len(arr) == 0 {
+		return cell{Kind: cellOps}
+	}
+	return cell{Value: strconv.Itoa(len(arr)), Kind: cellOps}
+}
+
 func documentRows(docs []data.Document, names entityNameMap) ([]table.Row, []rowMeta, [][]cell) {
 	return buildRows(docs, func(d data.Document) rowSpec {
 		return rowSpec{
@@ -663,6 +678,7 @@ func documentRows(docs []data.Document, names entityNameMap) ([]table.Row, []row
 				{Value: d.MIMEType, Kind: cellText},
 				{Value: formatFileSize(docSizeBytes(d)), Kind: cellReadonly},
 				{Value: d.ExtractionModel, Kind: cellReadonly},
+				opsCell(d.ExtractionOps),
 				{Value: d.Notes, Kind: cellNotes},
 				{Value: d.UpdatedAt.Format(data.DateLayout), Kind: cellReadonly},
 			},

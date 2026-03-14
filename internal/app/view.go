@@ -36,6 +36,7 @@ func (m *Model) buildView() string {
 		{m.dashboardVisible(), m.buildDashboardOverlay},
 		{m.calendar != nil, m.buildCalendarOverlay},
 		{m.notePreview != nil, m.buildNotePreviewOverlay},
+		{m.opsTree != nil, m.buildOpsTreeOverlay},
 		{m.columnFinder != nil, m.buildColumnFinderOverlay},
 		{m.docSearch != nil, m.buildDocSearchOverlay},
 		{m.ex.extraction != nil && m.ex.extraction.Visible, m.buildExtractionOverlay},
@@ -657,6 +658,9 @@ func (m *Model) enterHint() string {
 	spec := tab.Specs[col]
 	if spec.Kind == cellNotes {
 		return "preview"
+	}
+	if spec.Kind == cellOps {
+		return "ops"
 	}
 	if spec.Kind == cellDrilldown {
 		return m.drilldownHint(tab, spec)

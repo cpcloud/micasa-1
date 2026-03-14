@@ -1,0 +1,435 @@
+// Copyright 2026 Phillip Cloud
+// Licensed under the Apache License, Version 2.0
+
+package app
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/cpcloud/micasa/internal/data"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// testOpsJSON is a raw JSON blob matching what the extraction pipeline stores.
+var testOpsJSON = []byte(`[
+	{"action":"create","table":"vendors","data":{"email":"info@garcia.com","name":"Garcia Plumbing","phone":"555-1234"}},
+	{"action":"update","table":"documents","data":{"title":"Invoice #42"}}
+]`)
+
+// newOpsTreeModel creates a test model with a document that has extraction ops,
+// navigates to the Documents tab, and reloads data so the Ops column is populated.
+func newOpsTreeModel(t *testing.T) *Model {
+	t.Helper()
+
+	m := newTestModelWithStore(t)
+
+	doc := &data.Document{
+		Title:         "Test Invoice",
+		FileName:      "invoice.pdf",
+		MIMEType:      "application/pdf",
+		ExtractionOps: testOpsJSON,
+	}
+	require.NoError(t, m.store.CreateDocument(doc))
+
+	m.active = tabIndex(tabDocuments)
+	require.NoError(t, m.reloadTab(m.effectiveTab()))
+
+	return m
+}
+
+func TestOpsTreeOpenViaEnter(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	require.NotNil(t, tab)
+	tab.ColCursor = int(documentColOps)
+
+	sendKey(m, "enter")
+
+	require.NotNil(t, m.opsTree, "enter on Ops column should open ops tree overlay")
+	// Root is the "operations" wrapper with 2 children.
+	require.Len(t, m.opsTree.root, 1)
+	assert.Equal(t, "operations", m.opsTree.root[0].key)
+	assert.Len(t, m.opsTree.root[0].children, 2)
+	assert.Equal(t, "Test Invoice", m.opsTree.docTitle)
+}
+
+func TestOpsTreeDismissEsc(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	sendKey(m, "esc")
+	assert.Nil(t, m.opsTree, "esc should close ops tree overlay")
+}
+
+func TestOpsTreeNavigateJK(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	// "operations" is auto-expanded. With auto-expand depth<=2, full tree:
+	// operations, [0], action, table, data, email, name, phone, [1], action, table, data, title
+	// = 13 visible nodes.
+	nodes := m.opsTree.visibleNodes()
+	require.Len(t, nodes, 13)
+
+	assert.Equal(t, 0, m.opsTree.cursor)
+
+	sendKey(m, "j")
+	assert.Equal(t, 1, m.opsTree.cursor)
+
+	sendKey(m, "j")
+	assert.Equal(t, 2, m.opsTree.cursor)
+
+	sendKey(m, "k")
+	assert.Equal(t, 1, m.opsTree.cursor)
+}
+
+func TestOpsTreeExpandCollapse(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	// "operations" is auto-expanded. Navigate to [0] (node 1).
+	sendKey(m, "j")
+	assert.True(t, m.opsTree.expanded["operations.0"])
+
+	sendKey(m, "h")
+	assert.False(t, m.opsTree.expanded["operations.0"], "h should collapse [0]")
+
+	// Re-expand with enter.
+	sendKey(m, "enter")
+	assert.True(t, m.opsTree.expanded["operations.0"], "enter should re-expand [0]")
+}
+
+func TestOpsTreeCollapseFromChild(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	// Navigate to a leaf: operations(0), [0](1), action(2).
+	sendKey(m, "j") // [0]
+	sendKey(m, "j") // action (leaf)
+	nodes := m.opsTree.visibleNodes()
+	require.False(t, nodes[m.opsTree.cursor].isExpandable(), "should be on a leaf node")
+
+	// Press h to collapse parent [0] and jump to it.
+	sendKey(m, "h")
+	assert.False(t, m.opsTree.expanded["operations.0"], "h on child should collapse parent [0]")
+	assert.Equal(t, 1, m.opsTree.cursor, "cursor should jump to [0]")
+}
+
+func TestOpsTreeRendersInView(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	view := m.buildView()
+	assert.Contains(t, view, "operations")
+	assert.Contains(t, view, "action")
+	assert.Contains(t, view, "vendors")
+	assert.Contains(t, view, "Garcia Plumbing")
+	assert.Contains(t, view, "├")
+	assert.Contains(t, view, "└")
+}
+
+func TestOpsTreeNoOpenOnEmptyOps(t *testing.T) {
+	t.Parallel()
+	m := newTestModelWithStore(t)
+
+	// Create a document without extraction ops.
+	doc := &data.Document{
+		Title:    "Empty Doc",
+		FileName: "empty.pdf",
+		MIMEType: "application/pdf",
+	}
+	require.NoError(t, m.store.CreateDocument(doc))
+
+	m.active = tabIndex(tabDocuments)
+	require.NoError(t, m.reloadTab(m.effectiveTab()))
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+
+	assert.Nil(t, m.opsTree, "should not open tree when no ops exist")
+}
+
+func TestOpsTreeHasActiveOverlay(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	assert.True(t, m.hasActiveOverlay(), "ops tree should count as an active overlay")
+}
+
+func TestOpsTreeGAndShiftG(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	nodes := m.opsTree.visibleNodes()
+	require.Greater(t, len(nodes), 1)
+
+	sendKey(m, "G")
+	assert.Equal(t, len(nodes)-1, m.opsTree.cursor, "G should jump to last node")
+
+	sendKey(m, "g")
+	assert.Equal(t, 0, m.opsTree.cursor, "g should jump to first node")
+}
+
+func TestOpsTreeMouseClickToggle(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	// Render view to populate zones.
+	m.View()
+	m.View()
+
+	// Click on [0] node zone (node 1, after "operations" at 0).
+	z := m.zones.Get(zoneOpsNode + "1")
+	if z != nil && !z.IsZero() {
+		sendClick(m, z.StartX, z.StartY)
+		// [0] was expanded (auto-expand), click should collapse it.
+		assert.False(t, m.opsTree.expanded["operations.0"], "click should toggle expand state")
+	}
+}
+
+func TestOpsTreeLExpandsNode(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	// Navigate to [0] (node 1) and collapse it, then use l to expand.
+	sendKey(m, "j")
+	m.opsTree.expanded["operations.0"] = false
+	assert.False(t, m.opsTree.expanded["operations.0"])
+
+	sendKey(m, "l")
+	assert.True(t, m.opsTree.expanded["operations.0"], "l should expand the node")
+}
+
+func TestOpsCellRendering(t *testing.T) {
+	t.Parallel()
+
+	c := opsCell(testOpsJSON)
+	assert.Equal(t, "2", c.Value)
+	assert.Equal(t, cellOps, c.Kind)
+}
+
+func TestOpsCellEmpty(t *testing.T) {
+	t.Parallel()
+
+	c := opsCell(nil)
+	assert.Empty(t, c.Value)
+	assert.Equal(t, cellOps, c.Kind)
+
+	c = opsCell([]byte("[]"))
+	assert.Empty(t, c.Value)
+	assert.Equal(t, cellOps, c.Kind)
+}
+
+func TestOpsColumnEnterHint(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	hint := m.enterHint()
+	assert.Equal(t, "ops", hint)
+}
+
+func TestClassifyValueTypes(t *testing.T) {
+	t.Parallel()
+
+	val, kind := classifyValue("hello")
+	assert.Equal(t, `"hello"`, val)
+	assert.Equal(t, tvString, kind)
+
+	val, kind = classifyValue(42.0)
+	assert.Equal(t, "42", val)
+	assert.Equal(t, tvNumber, kind)
+
+	val, kind = classifyValue(3.14)
+	assert.Equal(t, "3.14", val)
+	assert.Equal(t, tvNumber, kind)
+
+	val, kind = classifyValue(true)
+	assert.Equal(t, "true", val)
+	assert.Equal(t, tvBool, kind)
+
+	val, kind = classifyValue(false)
+	assert.Equal(t, "false", val)
+	assert.Equal(t, tvBool, kind)
+
+	val, kind = classifyValue(nil)
+	assert.Equal(t, "null", val)
+	assert.Equal(t, tvNull, kind)
+}
+
+func TestCollapsedPreview(t *testing.T) {
+	t.Parallel()
+	nodes := buildJSONTree([]byte(`[{"email":"info@garcia.com","name":"Garcia Plumbing"}]`))
+	require.Len(t, nodes, 1)
+	// The "operations" root wraps the array; [0] is at root.children[0].
+	child := nodes[0].children[0]
+	preview := collapsedPreview(child, 60)
+	assert.Contains(t, preview, "email:")
+	assert.Contains(t, preview, "name:")
+	assert.True(t, strings.HasPrefix(preview, "{"))
+	assert.True(t, strings.HasSuffix(preview, "}"))
+}
+
+func TestCollapsedPreviewTruncates(t *testing.T) {
+	t.Parallel()
+	nodes := buildJSONTree(
+		[]byte(`[{"email":"info@garcia.com","name":"Garcia Plumbing","phone":"555-1234"}]`),
+	)
+	require.Len(t, nodes, 1)
+	child := nodes[0].children[0]
+	preview := collapsedPreview(child, 20)
+	assert.Contains(t, preview, symEllipsis)
+}
+
+func TestOpsTreeCollapsedShowsPreview(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	// Collapse [0].
+	m.opsTree.expanded["operations.0"] = false
+
+	view := m.buildView()
+	assert.Contains(t, view, "[0]")
+	assert.Contains(t, view, "{")
+}
+
+func TestBuildJSONTree(t *testing.T) {
+	t.Parallel()
+	root := buildJSONTree(testOpsJSON)
+	require.Len(t, root, 1)
+
+	// Root is the "operations" wrapper.
+	ops := root[0]
+	assert.Equal(t, "operations", ops.key)
+	assert.True(t, ops.isArray)
+	assert.True(t, ops.isExpandable())
+	assert.Empty(t, ops.treePrefix, "root has no tree prefix")
+
+	// Two array elements under operations.
+	require.Len(t, ops.children, 2)
+	first := ops.children[0]
+	assert.Equal(t, "[0]", first.key)
+	assert.Equal(t, treeBranch, first.treePrefix, "[0] is not last")
+	assert.Equal(t, treeCorner, ops.children[1].treePrefix, "[1] is last")
+
+	// [0] has children: action, table, data (ops key order).
+	require.Len(t, first.children, 3)
+	assert.Equal(t, "action", first.children[0].key)
+	assert.Equal(t, "table", first.children[1].key)
+	assert.Equal(t, "data", first.children[2].key)
+
+	// Children of [0] have │ continuation since [0] is not last.
+	assert.Equal(t, treePipe+treeBranch, first.children[0].treePrefix)
+	assert.Equal(t, treePipe+treeCorner, first.children[2].treePrefix)
+
+	// data is expandable with 3 children.
+	dataNode := first.children[2]
+	assert.True(t, dataNode.isExpandable())
+	require.Len(t, dataNode.children, 3)
+	assert.Equal(t, "email", dataNode.children[0].key)
+	assert.Equal(t, "name", dataNode.children[1].key)
+	assert.Equal(t, "phone", dataNode.children[2].key)
+
+	// Leaf values are classified correctly.
+	assert.Equal(t, `"info@garcia.com"`, dataNode.children[0].value)
+	assert.Equal(t, tvString, dataNode.children[0].valueKind)
+}
+
+func TestAutoExpand(t *testing.T) {
+	t.Parallel()
+	root := buildJSONTree(testOpsJSON)
+	expanded := make(map[string]bool)
+	autoExpand(root, expanded, 2)
+
+	// Depth 0: operations root.
+	assert.True(t, expanded["operations"])
+
+	// Depth 1: [0] and [1].
+	assert.True(t, expanded["operations.0"])
+	assert.True(t, expanded["operations.1"])
+
+	// Depth 2: data sub-objects.
+	assert.True(t, expanded["operations.0.data"])
+	assert.True(t, expanded["operations.1.data"])
+}
+
+func TestOpsTreeCollapseNestedContainer(t *testing.T) {
+	t.Parallel()
+	m := newOpsTreeModel(t)
+
+	tab := m.effectiveTab()
+	tab.ColCursor = int(documentColOps)
+	sendKey(m, "enter")
+	require.NotNil(t, m.opsTree)
+
+	// Navigate to the "data" container node under [0].
+	// Nodes: operations=0, [0]=1, action=2, table=3, data=4, ...
+	sendKey(m, "j") // [0]
+	sendKey(m, "j") // action
+	sendKey(m, "j") // table
+	sendKey(m, "j") // data
+	nodes := m.opsTree.visibleNodes()
+	require.Equal(t, "operations.0.data", nodes[m.opsTree.cursor].path)
+	require.True(t, nodes[m.opsTree.cursor].isExpandable())
+
+	// Collapse data with h.
+	sendKey(m, "h")
+	assert.False(t, m.opsTree.expanded["operations.0.data"], "h should collapse data node")
+	assert.Equal(t, 4, m.opsTree.cursor, "cursor stays on data node")
+}

@@ -306,6 +306,7 @@ var documentColumnDefs = []columnDef{
 	{"Type", columnSpec{Title: "Type", Min: 8, Max: 16}},
 	{"Size", columnSpec{Title: "Size", Min: 6, Max: 10, Align: alignRight, Kind: cellReadonly}},
 	{"Model", columnSpec{Title: "Model", Min: 8, Max: 20, Kind: cellReadonly}},
+	{"Ops", columnSpec{Title: "Ops", Min: 4, Max: 6, Align: alignRight, Kind: cellOps}},
 	{"Notes", columnSpec{Title: "Notes", Min: 12, Max: 40, Flex: true, Kind: cellNotes}},
 	{"Updated", columnSpec{Title: "Updated", Min: 10, Max: 12, Kind: cellReadonly}},
 }

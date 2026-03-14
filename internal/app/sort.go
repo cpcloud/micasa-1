@@ -121,7 +121,7 @@ func compareCells(tab *Tab, col, a, b int) int {
 			return cmpOrdered(strings.ToLower(va), strings.ToLower(vb))
 		}
 		return ta.Compare(tb)
-	case cellReadonly, cellDrilldown:
+	case cellReadonly, cellDrilldown, cellOps:
 		na, errA := strconv.ParseFloat(va, 64)
 		nb, errB := strconv.ParseFloat(vb, 64)
 		if errA != nil || errB != nil {

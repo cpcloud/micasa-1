@@ -236,6 +236,8 @@ func (s *Styles) ExtRunning() lipgloss.Style      { return s.fgAccent }
 func (s *Styles) ExtCursor() lipgloss.Style       { return s.fgAccent }
 func (s *Styles) HouseRoof() lipgloss.Style       { return s.fgAccent }
 func (s *Styles) AccentText() lipgloss.Style      { return s.fgAccent }
+func (s *Styles) TreeNumber() lipgloss.Style      { return s.fgAccent }
+func (s *Styles) TreeBool() lipgloss.Style        { return s.fgAccent }
 
 // --- Foreground(secondary) ---
 
@@ -253,6 +255,7 @@ func (s *Styles) Money() lipgloss.Style          { return s.fgSuccess }
 func (s *Styles) ExtOk() lipgloss.Style          { return s.fgSuccess }
 func (s *Styles) UrgencyFar() lipgloss.Style     { return s.fgSuccess }
 func (s *Styles) WarrantyActive() lipgloss.Style { return s.fgSuccess }
+func (s *Styles) TreeString() lipgloss.Style     { return s.fgSuccess }
 
 // --- Foreground(warning) ---
 
@@ -273,6 +276,7 @@ func (s *Styles) Pinned() lipgloss.Style        { return s.fgMuted }
 func (s *Styles) LinkIndicator() lipgloss.Style { return s.fgMuted }
 func (s *Styles) FilterMark() lipgloss.Style    { return s.fgMuted }
 func (s *Styles) ExtSkipLog() lipgloss.Style    { return s.fgMuted }
+func (s *Styles) TreeKey() lipgloss.Style       { return s.fgMuted }
 
 // --- Foreground(border) ---
 
@@ -287,6 +291,7 @@ func (s *Styles) TableHeader() lipgloss.Style { return s.fgTextDimBold }
 // --- Foreground + italic ---
 
 func (s *Styles) Null() lipgloss.Style           { return s.fgTextDimItalic }
+func (s *Styles) TreeNull() lipgloss.Style       { return s.fgTextDimItalic }
 func (s *Styles) DashSubtitle() lipgloss.Style   { return s.fgTextDimItalic }
 func (s *Styles) DashHouseValue() lipgloss.Style { return s.fgTextDimItalic }
 func (s *Styles) ModelRemote() lipgloss.Style    { return s.fgTextDimItalic }

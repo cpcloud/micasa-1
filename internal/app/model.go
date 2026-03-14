@@ -197,6 +197,7 @@ type Model struct {
 	showHouse             bool
 	showDashboard         bool
 	notePreview           *notePreviewState
+	opsTree               *opsTreeState
 	calendar              *calendarState
 	columnFinder          *columnFinderState
 	docSearch             *docSearchState
@@ -836,6 +837,12 @@ func (m *Model) handleNormalEnter() error {
 		if c, ok := m.selectedCell(col); ok && c.Value != "" {
 			m.notePreview = &notePreviewState{text: c.Value, title: spec.Title}
 		}
+		return nil
+	}
+
+	// On an ops column, open the extraction ops tree overlay.
+	if spec.Kind == cellOps {
+		m.openOpsTree()
 		return nil
 	}
 
@@ -1622,7 +1629,7 @@ func (m *Model) startCellOrFormEdit() error {
 		}
 	}
 
-	if spec.Kind == cellReadonly || spec.Kind == cellDrilldown {
+	if spec.Kind == cellReadonly || spec.Kind == cellDrilldown || spec.Kind == cellOps {
 		return m.startEditForm()
 	}
 	return tab.Handler.InlineEdit(m, meta.ID, col)
@@ -2572,6 +2579,7 @@ func (m *Model) hasActiveOverlay() bool {
 	return m.dashboardVisible() ||
 		m.calendar != nil ||
 		m.notePreview != nil ||
+		m.opsTree != nil ||
 		m.columnFinder != nil ||
 		m.docSearch != nil ||
 		(m.ex.extraction != nil && m.ex.extraction.Visible) ||
@@ -2589,6 +2597,8 @@ func (m *Model) dispatchOverlay(msg tea.Msg) (tea.Cmd, bool) {
 		handler = m.handleChatKey
 	case m.notePreview != nil:
 		handler = func(tea.KeyMsg) tea.Cmd { m.notePreview = nil; return nil }
+	case m.opsTree != nil:
+		handler = m.handleOpsTreeKey
 	case m.calendar != nil:
 		handler = m.handleCalendarKey
 	case m.columnFinder != nil:
