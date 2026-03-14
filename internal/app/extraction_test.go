@@ -2912,6 +2912,78 @@ func TestExtractionSkippedStep_LogNotJSON(t *testing.T) {
 		"skipped step log should not be rendered as JSON")
 }
 
+func TestExtractionFailedLLMStep_ErrorRenderedAsPlainText(t *testing.T) {
+	t.Parallel()
+	m := newExtractionModel(t, map[extractionStep]stepStatus{
+		stepText: stepDone,
+		stepLLM:  stepRunning,
+	})
+	ex := m.ex.extraction
+	ex.hasLLM = true
+	ex.Steps[stepLLM].Started = time.Now()
+
+	// Drive failure through the message path (simulating real LLM error).
+	m.Update(extractionLLMChunkMsg{
+		ID:   ex.ID,
+		Err:  errors.New("parse error: unexpected token"),
+		Done: true,
+	})
+	require.Equal(t, stepFailed, ex.Steps[stepLLM].Status)
+
+	// Expand the failed step to see the log.
+	ex.expanded[stepLLM] = true
+
+	view := m.buildExtractionOverlay()
+	assert.Contains(t, view, "parse error: unexpected token",
+		"failed step error should be visible as plain text")
+}
+
+func TestExtractionFailedLLMStep_JSONNotPrettyPrinted(t *testing.T) {
+	t.Parallel()
+	m := newExtractionModel(t, map[extractionStep]stepStatus{
+		stepText: stepDone,
+		stepLLM:  stepFailed,
+	})
+	ex := m.ex.extraction
+	ex.Done = true
+	ex.hasLLM = true
+	ex.HasError = true
+	// Use compact valid JSON as the log -- if the code takes the JSON
+	// rendering path, json.Indent would expand it to multiple lines.
+	// The fix should render it as-is (plain text, no pretty-printing).
+	ex.Steps[stepLLM].Logs = []string{`{"error":"bad input"}`}
+	ex.expanded[stepLLM] = true
+	ex.advanceCursor()
+
+	view := m.buildExtractionOverlay()
+	assert.Contains(t, view, `{"error":"bad input"}`,
+		"compact JSON should remain on one line, not pretty-printed")
+}
+
+func TestExtractionFailedExtractStep_ErrorRenderedAsPlainText(t *testing.T) {
+	t.Parallel()
+	m := newExtractionModel(t, map[extractionStep]stepStatus{
+		stepText:    stepDone,
+		stepExtract: stepRunning,
+	})
+	ex := m.ex.extraction
+	ex.hasExtract = true
+	ex.Steps[stepExtract].Started = time.Now()
+
+	// Drive extract failure through the message path.
+	m.Update(extractionProgressMsg{
+		ID:       ex.ID,
+		Progress: extract.ExtractProgress{Err: errors.New("tesseract not found")},
+	})
+	require.Equal(t, stepFailed, ex.Steps[stepExtract].Status)
+
+	ex.expanded[stepExtract] = true
+
+	view := m.buildExtractionOverlay()
+	assert.Contains(t, view, "tesseract not found",
+		"non-LLM failed step error should be visible as plain text")
+}
+
 func TestExtractionExtractFails_PingSkipPreventsLLM(t *testing.T) {
 	t.Parallel()
 	m := newExtractionModel(t, map[extractionStep]stepStatus{
