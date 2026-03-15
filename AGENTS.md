@@ -161,6 +161,7 @@ details; do not duplicate that detail here.
 - `/create-pr` -- PR body, rebase merges, description maintenance
 - `/audit-docs` -- after features or fixes
 - `/update-vendor-hash` -- after Go dependency changes
+- `/bump-deps` -- bump all project dependencies (Go modules + Nix flake inputs)
 - `/flake-update` -- periodically before committing/PRing
 - `/fix-osv-finding` -- when osv-scanner reports findings (findings are blockers)
 - `/create-issue` -- immediately for every user request, including small asks

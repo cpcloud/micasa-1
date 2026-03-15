@@ -50,7 +50,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31.10.0
+      - uses: cachix/install-nix-action@1ca7d21a94afc7c957383a2d217460d980de4934 # v31.10.1
 
       - name: Run govulncheck
         run: nix run '.#govulncheck'
@@ -68,7 +68,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31.10.0
+      - uses: cachix/install-nix-action@1ca7d21a94afc7c957383a2d217460d980de4934 # v31.10.1
 
       - name: Run osv-scanner
         run: nix run '.#osv-scanner'

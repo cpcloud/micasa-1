@@ -219,17 +219,19 @@ func TestOpsTreeMouseClickToggle(t *testing.T) {
 	sendKey(m, "enter")
 	require.NotNil(t, m.opsTree)
 
-	// Render view to populate zones.
+	// Render to populate zones including the overlay wrapper.
 	m.View()
-	m.View()
+	oz := m.zones.Get(zoneOverlay)
+	if oz == nil || oz.IsZero() {
+		t.Skip("overlay zone not rendered")
+	}
 
 	// Click on [0] node zone (node 1, after "operations" at 0).
-	z := m.zones.Get(zoneOpsNode + "1")
-	if z != nil && !z.IsZero() {
-		sendClick(m, z.StartX, z.StartY)
-		// [0] was expanded (auto-expand), click should collapse it.
-		assert.False(t, m.opsTree.expanded["operations.0"], "click should toggle expand state")
-	}
+	z := requireZone(t, m, zoneOpsNode+"1")
+	sendClick(m, z.StartX, z.StartY)
+	require.NotNil(t, m.opsTree, "click inside ops node zone should not dismiss overlay")
+	// [0] was expanded (auto-expand), click should collapse it.
+	assert.False(t, m.opsTree.expanded["operations.0"], "click should toggle expand state")
 }
 
 func TestOpsTreeLExpandsNode(t *testing.T) {

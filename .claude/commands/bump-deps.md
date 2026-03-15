@@ -1,0 +1,68 @@
+<!-- Copyright 2026 Phillip Cloud -->
+<!-- Licensed under the Apache License, Version 2.0 -->
+
+Bump all project dependencies to their latest versions and verify the
+build, tests, and security scans still pass. This covers Nix flake inputs,
+Go modules, Go tools vendored in `flake.nix`, and GitHub Actions.
+
+Fix forward: if an update breaks the build or tests, fix the breakage
+rather than pinning to the old version. Only pin as a last resort when
+the fix is non-trivial and unrelated to the current work.
+
+## Steps
+
+### 1. Nix flake inputs
+
+`nix flake update`
+
+### 2. Go modules
+
+1. `go get -u ./...`
+2. `go mod tidy`
+
+### 3. Go tools in flake.nix
+
+The `deadcode` package in `flake.nix` is built from a pinned
+`golang/tools` release. Check for a newer version:
+
+```
+gh api repos/golang/tools/releases/latest --jq .tag_name
+```
+
+If newer, update the `version`, `rev`, `hash`, and `vendorHash` fields
+in the `deadcode` derivation in `flake.nix`. Use `pkgs.lib.fakeHash` to
+obtain corrected hashes (see `/update-vendor-hash`).
+
+### 4. GitHub Actions
+
+For each `uses:` line pinned to a SHA in `.github/workflows/*.yml`:
+
+1. Look up the latest release:
+   `gh api repos/<owner>/<repo>/releases/latest --jq '.tag_name'`
+2. Get the SHA for that tag:
+   `gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq '.object.sha'`
+   (if the object type is `tag`, dereference:
+   `gh api repos/<owner>/<repo>/git/tags/<sha> --jq '.object.sha'`)
+3. Update both the SHA and the version comment, preserving the
+   `owner/repo@<sha> # <tag>` format.
+
+### 5. Verification
+
+Run these in order; fix any failures before proceeding to the next step.
+
+1. **Vendor hash**: use `/update-vendor-hash` to fix the Nix `vendorHash`
+   after `go.sum` or flake input changes
+2. **Nix build**: `nix build '.#micasa'`
+3. **Go build**: `go build ./...`
+4. **Tests**: `go test -shuffle=on ./...`
+5. **Vulnerability scan**: `nix run '.#osv-scanner'` -- if new findings
+   appear, use `/fix-osv-finding`. A newer Go version may resolve
+   previously ignored stdlib CVEs; remove stale `[[IgnoredVulns]]` from
+   `osv-scanner.toml` when fixed
+6. **Lint**: `nix run '.#pre-commit' -- --from-ref origin/main --to-ref HEAD --verbose`
+7. **Deadcode**: `nix run '.#deadcode'`
+
+## Commit
+
+Use `/commit` with type `chore(deps)` and a message summarizing what was
+bumped. Note any notable version jumps or behavioral changes in the body.

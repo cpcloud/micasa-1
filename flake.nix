@@ -33,7 +33,7 @@
           inherit version;
           src = ./.;
           subPackages = [ "cmd/micasa" ];
-          vendorHash = "sha256-qvThE9Ri2El41LZC4GRHJ17aIdkEhtzjTDDgv57t5z8=";
+          vendorHash = "sha256-cEV851hKgaoF5CpoXc4SBVETf+QGexVmw1tN0p7wKls=";
           env.CGO_ENABLED = 0;
           preCheck = ''
             export HOME="$(mktemp -d)"
@@ -216,15 +216,15 @@
 
         deadcode = pkgs.buildGoModule {
           pname = "deadcode";
-          version = "0.42.0";
+          version = "0.43.0";
           src = pkgs.fetchFromGitHub {
             owner = "golang";
             repo = "tools";
-            rev = "v0.42.0";
-            hash = "sha256-0RiinnIocPaj8Z5jtYGkbFiRf1BXyap4Z8e/sw2FBgg=";
+            rev = "v0.43.0";
+            hash = "sha256-A4c+/kWJQ6/3dIu8lR/NW9HUvsrIVs255lPfBYWK3tE=";
           };
           subPackages = [ "cmd/deadcode" ];
-          vendorHash = "sha256-oYmM+5lNmlP2i78NsG3v4WRhAUbiwS+EFkiicI6MKXA=";
+          vendorHash = "sha256-+tJs+0exGSauZr7PBuXf0htoiLST5GVMiP2lEFpd4A4=";
           doCheck = false;
         };
 
