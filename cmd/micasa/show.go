@@ -218,6 +218,7 @@ appliances, incidents, documents, all.`,
 			&deletedFlag,
 			showMaintenanceCategories,
 		),
+		newShowEntityCmd("all", "Show all entities", &jsonFlag, &deletedFlag, showAll),
 	)
 
 	return cmd
@@ -294,6 +295,8 @@ func runShow(w io.Writer, store *data.Store, entity string, asJSON, includeDelet
 		return showProjectTypes(w, store, asJSON, includeDeleted)
 	case "maintenance-categories":
 		return showMaintenanceCategories(w, store, asJSON, includeDeleted)
+	case "all":
+		return showAll(w, store, asJSON, includeDeleted)
 	default:
 		return fmt.Errorf("unknown entity %q; valid entities: %s",
 			entity, strings.Join(validEntities, ", "))
@@ -745,4 +748,133 @@ func showMaintenanceCategories(w io.Writer, store *data.Store, asJSON, _ bool) e
 		maintenanceCategoryToMap,
 		asJSON,
 	)
+}
+
+// --- all ---
+
+// mapSlice converts a slice of T to a slice of map[string]any using toMap.
+func mapSlice[T any](items []T, toMap func(T) map[string]any) []map[string]any {
+	out := make([]map[string]any, len(items))
+	for i, item := range items {
+		out[i] = toMap(item)
+	}
+	return out
+}
+
+func showAll(w io.Writer, store *data.Store, asJSON, includeDeleted bool) error {
+	if asJSON {
+		return showAllJSON(w, store, includeDeleted)
+	}
+	return showAllText(w, store, includeDeleted)
+}
+
+func showAllText(w io.Writer, store *data.Store, includeDeleted bool) error {
+	if err := showHouse(w, store, false); err != nil {
+		return err
+	}
+	showFns := []func(io.Writer, *data.Store, bool, bool) error{
+		showProjects, showVendors, showAppliances, showIncidents,
+		showQuotes, showMaintenance, showServiceLog, showDocuments,
+		showProjectTypes, showMaintenanceCategories,
+	}
+	for _, fn := range showFns {
+		if err := fn(w, store, false, includeDeleted); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func showAllJSON(w io.Writer, store *data.Store, includeDeleted bool) error {
+	result := make(map[string]any)
+
+	h, err := store.HouseProfile()
+	if err == nil {
+		result["house"] = h
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("load house profile: %w", err)
+	}
+
+	projects, err := store.ListProjects(includeDeleted)
+	if err != nil {
+		return fmt.Errorf("list projects: %w", err)
+	}
+	_, projToMap := withDeletedCol(projectCols, projectToMap, includeDeleted,
+		func(p data.Project) gorm.DeletedAt { return p.DeletedAt })
+	result["projects"] = mapSlice(projects, projToMap)
+
+	ptypes, err := store.ProjectTypes()
+	if err != nil {
+		return fmt.Errorf("list project types: %w", err)
+	}
+	result["project_types"] = mapSlice(ptypes, projectTypeToMap)
+
+	vendors, err := store.ListVendors(includeDeleted)
+	if err != nil {
+		return fmt.Errorf("list vendors: %w", err)
+	}
+	_, vendToMap := withDeletedCol(vendorCols, vendorToMap, includeDeleted,
+		func(v data.Vendor) gorm.DeletedAt { return v.DeletedAt })
+	result["vendors"] = mapSlice(vendors, vendToMap)
+
+	quotes, err := store.ListQuotes(includeDeleted)
+	if err != nil {
+		return fmt.Errorf("list quotes: %w", err)
+	}
+	_, quoteMap := withDeletedCol(quoteCols, quoteToMap, includeDeleted,
+		func(q data.Quote) gorm.DeletedAt { return q.DeletedAt })
+	result["quotes"] = mapSlice(quotes, quoteMap)
+
+	maintenance, err := store.ListMaintenance(includeDeleted)
+	if err != nil {
+		return fmt.Errorf("list maintenance: %w", err)
+	}
+	_, maintMap := withDeletedCol(maintenanceCols, maintenanceToMap, includeDeleted,
+		func(m data.MaintenanceItem) gorm.DeletedAt { return m.DeletedAt })
+	result["maintenance"] = mapSlice(maintenance, maintMap)
+
+	mcats, err := store.MaintenanceCategories()
+	if err != nil {
+		return fmt.Errorf("list maintenance categories: %w", err)
+	}
+	result["maintenance_categories"] = mapSlice(mcats, maintenanceCategoryToMap)
+
+	svcLog, err := store.ListAllServiceLogEntries(includeDeleted)
+	if err != nil {
+		return fmt.Errorf("list service log: %w", err)
+	}
+	_, svcMap := withDeletedCol(serviceLogCols, serviceLogToMap, includeDeleted,
+		func(e data.ServiceLogEntry) gorm.DeletedAt { return e.DeletedAt })
+	result["service_log"] = mapSlice(svcLog, svcMap)
+
+	appliances, err := store.ListAppliances(includeDeleted)
+	if err != nil {
+		return fmt.Errorf("list appliances: %w", err)
+	}
+	_, appMap := withDeletedCol(applianceCols, applianceToMap, includeDeleted,
+		func(a data.Appliance) gorm.DeletedAt { return a.DeletedAt })
+	result["appliances"] = mapSlice(appliances, appMap)
+
+	incidents, err := store.ListIncidents(includeDeleted)
+	if err != nil {
+		return fmt.Errorf("list incidents: %w", err)
+	}
+	_, incMap := withDeletedCol(incidentCols, incidentToMap, includeDeleted,
+		func(i data.Incident) gorm.DeletedAt { return i.DeletedAt })
+	result["incidents"] = mapSlice(incidents, incMap)
+
+	documents, err := store.ListDocuments(includeDeleted)
+	if err != nil {
+		return fmt.Errorf("list documents: %w", err)
+	}
+	_, docMap := withDeletedCol(documentCols, documentToMap, includeDeleted,
+		func(d data.Document) gorm.DeletedAt { return d.DeletedAt })
+	result["documents"] = mapSlice(documents, docMap)
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(result); err != nil {
+		return fmt.Errorf("encode JSON: %w", err)
+	}
+	return nil
 }

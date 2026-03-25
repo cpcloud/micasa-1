@@ -707,3 +707,82 @@ func TestShowMaintenanceCategoriesJSON(t *testing.T) {
 	assert.NotEmpty(t, result[0]["name"])
 	assert.NotEmpty(t, result[0]["id"])
 }
+
+// --- all ---
+
+func TestShowAllText(t *testing.T) {
+	t.Parallel()
+	store := newTestStoreWithMigration(t)
+	types, err := store.ProjectTypes()
+	require.NoError(t, err)
+
+	require.NoError(t, store.CreateProject(&data.Project{
+		Title:         "Test Project",
+		ProjectTypeID: types[0].ID,
+		Status:        data.ProjectStatusPlanned,
+	}))
+	require.NoError(t, store.CreateVendor(&data.Vendor{Name: "Test Vendor"}))
+
+	var buf bytes.Buffer
+	require.NoError(t, runShow(&buf, store, "all", false, false))
+
+	out := buf.String()
+	assert.Contains(t, out, "PROJECTS")
+	assert.Contains(t, out, "Test Project")
+	assert.Contains(t, out, "VENDORS")
+	assert.Contains(t, out, "Test Vendor")
+}
+
+func TestShowAllJSON(t *testing.T) {
+	t.Parallel()
+	store := newTestStoreWithMigration(t)
+	require.NoError(t, store.CreateVendor(&data.Vendor{Name: "Test Vendor"}))
+
+	var buf bytes.Buffer
+	require.NoError(t, runShow(&buf, store, "all", true, false))
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+	assert.Contains(t, result, "vendors")
+	assert.Contains(t, result, "projects")
+	assert.Contains(t, result, "project_types")
+	assert.Contains(t, result, "quotes")
+	assert.Contains(t, result, "maintenance")
+	assert.Contains(t, result, "maintenance_categories")
+	assert.Contains(t, result, "service_log")
+	assert.Contains(t, result, "appliances")
+	assert.Contains(t, result, "incidents")
+	assert.Contains(t, result, "documents")
+
+	vendors, ok := result["vendors"].([]any)
+	require.True(t, ok)
+	require.Len(t, vendors, 1)
+	vendor := vendors[0].(map[string]any)
+	assert.Equal(t, "Test Vendor", vendor["name"])
+}
+
+func TestShowAllTextEmptyStore(t *testing.T) {
+	t.Parallel()
+	store := newTestStoreWithMigration(t)
+
+	var buf bytes.Buffer
+	require.NoError(t, runShow(&buf, store, "all", false, false))
+
+	// project-types and maintenance-categories are seeded, so output is non-empty,
+	// but no user data sections should appear
+	out := buf.String()
+	assert.NotContains(t, out, "PROJECTS")
+	assert.NotContains(t, out, "VENDORS")
+}
+
+func TestShowAllJSONNoHouse(t *testing.T) {
+	t.Parallel()
+	store := newTestStoreWithMigration(t)
+
+	var buf bytes.Buffer
+	require.NoError(t, runShow(&buf, store, "all", true, false))
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+	assert.NotContains(t, result, "house")
+}
