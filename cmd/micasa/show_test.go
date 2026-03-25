@@ -615,6 +615,85 @@ func TestShowMaintenanceCategoriesText(t *testing.T) {
 	assert.Contains(t, out, "NAME")
 }
 
+// --- deleted flag ---
+
+func TestShowDeletedProjects(t *testing.T) {
+	t.Parallel()
+	store := newTestStoreWithMigration(t)
+	types, err := store.ProjectTypes()
+	require.NoError(t, err)
+
+	require.NoError(t, store.CreateProject(&data.Project{
+		Title:         "Active",
+		ProjectTypeID: types[0].ID,
+		Status:        data.ProjectStatusPlanned,
+	}))
+
+	p2 := &data.Project{
+		Title:         "Deleted",
+		ProjectTypeID: types[0].ID,
+		Status:        data.ProjectStatusAbandoned,
+	}
+	require.NoError(t, store.CreateProject(p2))
+	require.NoError(t, store.DeleteProject(p2.ID))
+
+	var buf bytes.Buffer
+	require.NoError(t, runShow(&buf, store, "projects", false, false))
+	assert.Contains(t, buf.String(), "Active")
+	assert.NotContains(t, buf.String(), "Deleted")
+
+	buf.Reset()
+	require.NoError(t, runShow(&buf, store, "projects", false, true))
+	out := buf.String()
+	assert.Contains(t, out, "Active")
+	assert.Contains(t, out, "Deleted")
+	assert.Contains(t, out, "DELETED")
+}
+
+func TestShowDeletedJSON(t *testing.T) {
+	t.Parallel()
+	store := newTestStoreWithMigration(t)
+	types, err := store.ProjectTypes()
+	require.NoError(t, err)
+
+	p := &data.Project{
+		Title:         "Gone",
+		ProjectTypeID: types[0].ID,
+		Status:        data.ProjectStatusPlanned,
+	}
+	require.NoError(t, store.CreateProject(p))
+	require.NoError(t, store.DeleteProject(p.ID))
+
+	var buf bytes.Buffer
+	require.NoError(t, runShow(&buf, store, "projects", true, true))
+
+	var result []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+	require.Len(t, result, 1)
+	assert.NotNil(t, result[0]["deleted_at"])
+}
+
+func TestShowDeletedActiveHasNoDash(t *testing.T) {
+	t.Parallel()
+	store := newTestStoreWithMigration(t)
+	types, err := store.ProjectTypes()
+	require.NoError(t, err)
+
+	require.NoError(t, store.CreateProject(&data.Project{
+		Title:         "StillActive",
+		ProjectTypeID: types[0].ID,
+		Status:        data.ProjectStatusPlanned,
+	}))
+
+	var buf bytes.Buffer
+	require.NoError(t, runShow(&buf, store, "projects", true, true))
+
+	var result []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+	require.Len(t, result, 1)
+	assert.Nil(t, result[0]["deleted_at"])
+}
+
 func TestShowMaintenanceCategoriesJSON(t *testing.T) {
 	t.Parallel()
 	store := newTestStoreWithMigration(t)

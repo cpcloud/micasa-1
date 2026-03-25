@@ -130,6 +130,39 @@ func fmtDateVal(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
+// withDeletedCol appends a DELETED column and deleted_at JSON field when includeDeleted is true.
+func withDeletedCol[T any](
+	cols []showCol[T],
+	toMap func(T) map[string]any,
+	includeDeleted bool,
+	deletedAt func(T) gorm.DeletedAt,
+) ([]showCol[T], func(T) map[string]any) {
+	if !includeDeleted {
+		return cols, toMap
+	}
+	extended := make([]showCol[T], len(cols)+1)
+	copy(extended, cols)
+	extended[len(cols)] = showCol[T]{
+		header: "DELETED",
+		value: func(item T) string {
+			da := deletedAt(item)
+			if da.Valid {
+				return da.Time.Format("2006-01-02")
+			}
+			return "-"
+		},
+	}
+	extendedToMap := func(item T) map[string]any {
+		m := toMap(item)
+		da := deletedAt(item)
+		if da.Valid {
+			m["deleted_at"] = da.Time
+		}
+		return m
+	}
+	return extended, extendedToMap
+}
+
 // --- show command ---
 
 func newShowCmd() *cobra.Command {
@@ -399,7 +432,9 @@ func showProjects(w io.Writer, store *data.Store, asJSON, includeDeleted bool) e
 	if err != nil {
 		return fmt.Errorf("list projects: %w", err)
 	}
-	return showEntity(w, "PROJECTS", items, projectCols, projectToMap, asJSON)
+	cols, toMap := withDeletedCol(projectCols, projectToMap, includeDeleted,
+		func(p data.Project) gorm.DeletedAt { return p.DeletedAt })
+	return showEntity(w, "PROJECTS", items, cols, toMap, asJSON)
 }
 
 // --- vendors ---
@@ -429,7 +464,9 @@ func showVendors(w io.Writer, store *data.Store, asJSON, includeDeleted bool) er
 	if err != nil {
 		return fmt.Errorf("list vendors: %w", err)
 	}
-	return showEntity(w, "VENDORS", items, vendorCols, vendorToMap, asJSON)
+	cols, toMap := withDeletedCol(vendorCols, vendorToMap, includeDeleted,
+		func(v data.Vendor) gorm.DeletedAt { return v.DeletedAt })
+	return showEntity(w, "VENDORS", items, cols, toMap, asJSON)
 }
 
 // --- appliances ---
@@ -465,7 +502,9 @@ func showAppliances(w io.Writer, store *data.Store, asJSON, includeDeleted bool)
 	if err != nil {
 		return fmt.Errorf("list appliances: %w", err)
 	}
-	return showEntity(w, "APPLIANCES", items, applianceCols, applianceToMap, asJSON)
+	cols, toMap := withDeletedCol(applianceCols, applianceToMap, includeDeleted,
+		func(a data.Appliance) gorm.DeletedAt { return a.DeletedAt })
+	return showEntity(w, "APPLIANCES", items, cols, toMap, asJSON)
 }
 
 // --- incidents ---
@@ -504,7 +543,9 @@ func showIncidents(w io.Writer, store *data.Store, asJSON, includeDeleted bool) 
 	if err != nil {
 		return fmt.Errorf("list incidents: %w", err)
 	}
-	return showEntity(w, "INCIDENTS", items, incidentCols, incidentToMap, asJSON)
+	cols, toMap := withDeletedCol(incidentCols, incidentToMap, includeDeleted,
+		func(i data.Incident) gorm.DeletedAt { return i.DeletedAt })
+	return showEntity(w, "INCIDENTS", items, cols, toMap, asJSON)
 }
 
 // --- quotes ---
@@ -541,7 +582,9 @@ func showQuotes(w io.Writer, store *data.Store, asJSON, includeDeleted bool) err
 	if err != nil {
 		return fmt.Errorf("list quotes: %w", err)
 	}
-	return showEntity(w, "QUOTES", items, quoteCols, quoteToMap, asJSON)
+	cols, toMap := withDeletedCol(quoteCols, quoteToMap, includeDeleted,
+		func(q data.Quote) gorm.DeletedAt { return q.DeletedAt })
+	return showEntity(w, "QUOTES", items, cols, toMap, asJSON)
 }
 
 // --- maintenance ---
@@ -577,7 +620,9 @@ func showMaintenance(w io.Writer, store *data.Store, asJSON, includeDeleted bool
 	if err != nil {
 		return fmt.Errorf("list maintenance: %w", err)
 	}
-	return showEntity(w, "MAINTENANCE", items, maintenanceCols, maintenanceToMap, asJSON)
+	cols, toMap := withDeletedCol(maintenanceCols, maintenanceToMap, includeDeleted,
+		func(m data.MaintenanceItem) gorm.DeletedAt { return m.DeletedAt })
+	return showEntity(w, "MAINTENANCE", items, cols, toMap, asJSON)
 }
 
 // --- service-log ---
@@ -606,7 +651,9 @@ func showServiceLog(w io.Writer, store *data.Store, asJSON, includeDeleted bool)
 	if err != nil {
 		return fmt.Errorf("list service log: %w", err)
 	}
-	return showEntity(w, "SERVICE LOG", items, serviceLogCols, serviceLogToMap, asJSON)
+	cols, toMap := withDeletedCol(serviceLogCols, serviceLogToMap, includeDeleted,
+		func(e data.ServiceLogEntry) gorm.DeletedAt { return e.DeletedAt })
+	return showEntity(w, "SERVICE LOG", items, cols, toMap, asJSON)
 }
 
 // --- documents ---
@@ -646,7 +693,9 @@ func showDocuments(w io.Writer, store *data.Store, asJSON, includeDeleted bool) 
 	if err != nil {
 		return fmt.Errorf("list documents: %w", err)
 	}
-	return showEntity(w, "DOCUMENTS", items, documentCols, documentToMap, asJSON)
+	cols, toMap := withDeletedCol(documentCols, documentToMap, includeDeleted,
+		func(d data.Document) gorm.DeletedAt { return d.DeletedAt })
+	return showEntity(w, "DOCUMENTS", items, cols, toMap, asJSON)
 }
 
 // --- project-types ---
