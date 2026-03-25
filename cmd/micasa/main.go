@@ -79,6 +79,7 @@ func newRootCmd() *cobra.Command {
 		newProCmd(),
 		newMCPCmd(),
 		newShowCmd(),
+		newQueryCmd(),
 	)
 
 	return root
