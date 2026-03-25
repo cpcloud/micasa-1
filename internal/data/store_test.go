@@ -1910,6 +1910,31 @@ func TestListServiceLogsByVendor(t *testing.T) {
 		"preloaded MaintenanceItem should be available")
 }
 
+func TestListAllServiceLogEntries(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	cats, err := store.MaintenanceCategories()
+	require.NoError(t, err)
+	require.NotEmpty(t, cats)
+
+	item := MaintenanceItem{Name: "Filter", CategoryID: cats[0].ID, Season: "spring"}
+	require.NoError(t, store.CreateMaintenance(&item))
+
+	item2 := MaintenanceItem{Name: "Coils", CategoryID: cats[0].ID, Season: "fall"}
+	require.NoError(t, store.CreateMaintenance(&item2))
+
+	entry1 := ServiceLogEntry{MaintenanceItemID: item.ID, ServicedAt: time.Now()}
+	require.NoError(t, store.CreateServiceLog(&entry1, Vendor{}))
+
+	entry2 := ServiceLogEntry{MaintenanceItemID: item2.ID, ServicedAt: time.Now()}
+	require.NoError(t, store.CreateServiceLog(&entry2, Vendor{}))
+
+	entries, err := store.ListAllServiceLogEntries(false)
+	require.NoError(t, err)
+	assert.Len(t, entries, 2)
+}
+
 func TestDocumentCRUD(t *testing.T) {
 	t.Parallel()
 	store := newTestStore(t)
