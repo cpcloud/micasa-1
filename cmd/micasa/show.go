@@ -418,15 +418,16 @@ var projectCols = []showCol[data.Project]{
 
 func projectToMap(p data.Project) map[string]any {
 	return map[string]any{
-		"id":           p.ID,
-		"title":        p.Title,
-		"project_type": p.ProjectType.Name,
-		"status":       p.Status,
-		"start_date":   p.StartDate,
-		"end_date":     p.EndDate,
-		"budget_cents": p.BudgetCents,
-		"actual_cents": p.ActualCents,
-		"description":  p.Description,
+		"id":              p.ID,
+		"title":           p.Title,
+		"project_type_id": p.ProjectTypeID,
+		"project_type":    p.ProjectType.Name,
+		"status":          p.Status,
+		"start_date":      p.StartDate,
+		"end_date":        p.EndDate,
+		"budget_cents":    p.BudgetCents,
+		"actual_cents":    p.ActualCents,
+		"description":     p.Description,
 	}
 }
 
@@ -534,7 +535,9 @@ func incidentToMap(i data.Incident) map[string]any {
 		"date_resolved": i.DateResolved,
 		"location":      i.Location,
 		"cost_cents":    i.CostCents,
+		"appliance_id":  i.ApplianceID,
 		"appliance":     i.Appliance.Name,
+		"vendor_id":     i.VendorID,
 		"vendor":        i.Vendor.Name,
 		"description":   i.Description,
 		"notes":         i.Notes,
@@ -570,7 +573,9 @@ var quoteCols = []showCol[data.Quote]{
 func quoteToMap(q data.Quote) map[string]any {
 	return map[string]any{
 		"id":              q.ID,
+		"project_id":      q.ProjectID,
 		"project":         q.Project.Title,
+		"vendor_id":       q.VendorID,
 		"vendor":          q.Vendor.Name,
 		"total_cents":     q.TotalCents,
 		"labor_cents":     q.LaborCents,
@@ -607,7 +612,9 @@ func maintenanceToMap(m data.MaintenanceItem) map[string]any {
 	return map[string]any{
 		"id":               m.ID,
 		"name":             m.Name,
+		"category_id":      m.CategoryID,
 		"category":         m.Category.Name,
+		"appliance_id":     m.ApplianceID,
 		"appliance":        m.Appliance.Name,
 		"season":           m.Season,
 		"last_serviced_at": m.LastServicedAt,
@@ -640,12 +647,14 @@ var serviceLogCols = []showCol[data.ServiceLogEntry]{
 
 func serviceLogToMap(e data.ServiceLogEntry) map[string]any {
 	return map[string]any{
-		"id":               e.ID,
-		"maintenance_item": e.MaintenanceItem.Name,
-		"vendor":           e.Vendor.Name,
-		"serviced_at":      e.ServicedAt,
-		"cost_cents":       e.CostCents,
-		"notes":            e.Notes,
+		"id":                  e.ID,
+		"maintenance_item_id": e.MaintenanceItemID,
+		"maintenance_item":    e.MaintenanceItem.Name,
+		"vendor_id":           e.VendorID,
+		"vendor":              e.Vendor.Name,
+		"serviced_at":         e.ServicedAt,
+		"cost_cents":          e.CostCents,
+		"notes":               e.Notes,
 	}
 }
 
