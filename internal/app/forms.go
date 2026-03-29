@@ -177,6 +177,18 @@ type applianceFormData struct {
 	Notes          string
 }
 
+// houseFormWidth returns the form width for the house profile form.
+// Scales to half the terminal width on wide terminals, clamped to [30, 80].
+// At standard widths (<=120) this returns 60, preserving the old default.
+func (m *Model) houseFormWidth() int {
+	ew := m.effectiveWidth()
+	formWidth := max(min(ew/2, 80), 60)
+	if ew < formWidth+10 {
+		formWidth = max(ew-10, 30)
+	}
+	return formWidth
+}
+
 func (m *Model) startHouseForm() {
 	values := &houseFormData{}
 	if m.hasHouse {
@@ -265,11 +277,7 @@ func (m *Model) startHouseForm() {
 				Validate(optionalMoney("HOA fee", m.cur)),
 		).Title("Financial"),
 	)
-	formWidth := 60
-	if m.width > 0 && m.width < formWidth+10 {
-		formWidth = m.width - 10
-	}
-	form.WithWidth(formWidth)
+	form.WithWidth(m.houseFormWidth())
 	m.activateForm(form, values)
 	m.fs.postalCodeField = postalCodeInput
 	m.fs.cityInput = cityInput
