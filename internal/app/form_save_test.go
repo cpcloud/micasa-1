@@ -1033,6 +1033,32 @@ func TestCtrlSSaveClearsStatusErrorAfterRetry(t *testing.T) {
 		"status should show saved confirmation")
 }
 
+func TestHouseFormWidth(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		termWidth int
+		want      int
+	}{
+		{"ultra-wide caps at 80", 200, 80},
+		{"wide terminal", 160, 80},
+		{"standard terminal unchanged", 120, 60},
+		{"normal terminal unchanged", 100, 60},
+		{"minimum size unchanged", 80, 60},
+		{"narrow scales down", 65, 55},
+		{"very narrow scales down", 50, 40},
+		{"extremely narrow floors at 30", 35, 30},
+		{"zero-width uses default", 0, 60},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel(t)
+			m.width = tt.termWidth
+			assert.Equal(t, tt.want, m.houseFormWidth())
+		})
+	}
+}
+
 func TestDateParserRejectsGarbageInput(t *testing.T) {
 	t.Parallel()
 	m := newTestModelWithStore(t)

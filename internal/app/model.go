@@ -1282,8 +1282,8 @@ func (m *Model) effectiveHeight() int {
 }
 
 // overlayContentWidth returns the clamped content width for overlay boxes
-// (dashboard, note preview). Accounts for border (2), padding (4), and
-// breathing room (6) = 12 total, clamped to [30, 72].
+// (dashboard, note preview, ops tree). Accounts for border (2), padding (4),
+// and breathing room (6) = 12 total, clamped to [30, 72].
 func (m *Model) overlayContentWidth() int {
 	w := m.effectiveWidth() - 12
 	if w > 72 {
