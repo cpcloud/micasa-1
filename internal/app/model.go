@@ -1111,7 +1111,8 @@ func (m *Model) reloadAfterFormSave(kind FormKind) {
 	case formVendor:
 		m.surfaceError(m.loadLookups())
 		m.reloadAfterMutation()
-	default:
+	case formNone, formProject, formQuote, formMaintenance, formAppliance,
+		formIncident, formServiceLog, formDocument:
 		m.reloadAfterMutation()
 	}
 }

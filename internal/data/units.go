@@ -84,9 +84,10 @@ func FormatArea(sqft int, u UnitSystem) string {
 	case UnitsMetric:
 		sqm := SqFtToDisplayInt(sqft, UnitsMetric)
 		return fmt.Sprintf("%s m%s", humanize.Comma(int64(sqm)), symSuperTwo)
-	default:
+	case UnitsImperial:
 		return fmt.Sprintf("%s ft%s", humanize.Comma(int64(sqft)), symSuperTwo)
 	}
+	panic(fmt.Sprintf("unhandled UnitSystem: %d", u))
 }
 
 // FormatLotArea formats a stored lot sq ft value with a "lot" suffix.
@@ -99,9 +100,10 @@ func FormatLotArea(sqft int, u UnitSystem) string {
 	case UnitsMetric:
 		sqm := SqFtToDisplayInt(sqft, UnitsMetric)
 		return fmt.Sprintf("%s m%s lot", humanize.Comma(int64(sqm)), symSuperTwo)
-	default:
+	case UnitsImperial:
 		return fmt.Sprintf("%s ft%s lot", humanize.Comma(int64(sqft)), symSuperTwo)
 	}
+	panic(fmt.Sprintf("unhandled UnitSystem: %d", u))
 }
 
 // AreaFormTitle returns the form field title for the building area.
@@ -109,9 +111,10 @@ func AreaFormTitle(u UnitSystem) string {
 	switch u {
 	case UnitsMetric:
 		return "Square meters"
-	default:
+	case UnitsImperial:
 		return "Square feet"
 	}
+	panic(fmt.Sprintf("unhandled UnitSystem: %d", u))
 }
 
 // LotAreaFormTitle returns the form field title for the lot area.
@@ -119,9 +122,10 @@ func LotAreaFormTitle(u UnitSystem) string {
 	switch u {
 	case UnitsMetric:
 		return "Lot square meters"
-	default:
+	case UnitsImperial:
 		return "Lot square feet"
 	}
+	panic(fmt.Sprintf("unhandled UnitSystem: %d", u))
 }
 
 // AreaPlaceholder returns a placeholder value for the building area field.
@@ -129,9 +133,10 @@ func AreaPlaceholder(u UnitSystem) string {
 	switch u {
 	case UnitsMetric:
 		return "169"
-	default:
+	case UnitsImperial:
 		return "1820"
 	}
+	panic(fmt.Sprintf("unhandled UnitSystem: %d", u))
 }
 
 // LotAreaPlaceholder returns a placeholder value for the lot area field.
@@ -139,9 +144,10 @@ func LotAreaPlaceholder(u UnitSystem) string {
 	switch u {
 	case UnitsMetric:
 		return "650"
-	default:
+	case UnitsImperial:
 		return "7000"
 	}
+	panic(fmt.Sprintf("unhandled UnitSystem: %d", u))
 }
 
 // imperialRegions are ISO 3166-1 alpha-2 codes for regions that use

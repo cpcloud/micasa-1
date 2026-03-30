@@ -299,7 +299,8 @@ func seedTabMoneyCells(tab *Tab, amounts []string) {
 				cr[j] = cell{Value: amt, Kind: cellMoney}
 			case cellReadonly:
 				cr[j] = cell{Value: "1", Kind: cellReadonly}
-			default:
+			case cellText, cellDate, cellStatus, cellDrilldown, cellWarranty,
+				cellUrgency, cellNotes, cellEntity, cellOps:
 				cr[j] = cell{Value: "test", Kind: spec.Kind}
 			}
 			r[j] = cr[j].Value
@@ -386,7 +387,8 @@ func seedMoneyCells(m *Model) {
 			row[i] = cell{Value: "$5,000.00", Kind: cellMoney}
 		case cellReadonly:
 			row[i] = cell{Value: "1", Kind: cellReadonly}
-		default:
+		case cellText, cellDate, cellStatus, cellDrilldown, cellWarranty,
+			cellUrgency, cellNotes, cellEntity, cellOps:
 			row[i] = cell{Value: "test", Kind: spec.Kind}
 		}
 	}

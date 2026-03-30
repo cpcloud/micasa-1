@@ -612,9 +612,10 @@ func (m *Model) valueStyle(kind treeValueKind) lipgloss.Style {
 		return m.styles.TreeBool()
 	case tvNull:
 		return m.styles.TreeNull()
-	default:
+	case tvOther:
 		return m.styles.Base()
 	}
+	panic(fmt.Sprintf("unhandled treeValueKind: %d", kind))
 }
 
 // classifyValue formats and classifies a JSON value for display and coloring.

@@ -643,9 +643,11 @@ func cellStyle(kind cellKind) lipgloss.Style {
 		return appStyles.Money()
 	case cellReadonly:
 		return appStyles.Readonly()
-	default:
+	case cellText, cellDate, cellStatus, cellDrilldown, cellWarranty,
+		cellUrgency, cellNotes, cellEntity, cellOps:
 		return defaultStyle
 	}
+	panic(fmt.Sprintf("unhandled cellKind: %d", kind))
 }
 
 // Urgency/warranty/entity-kind styles live in appStyles to avoid
@@ -774,9 +776,10 @@ func formatCell(value string, width int, align alignKind) string {
 	switch align {
 	case alignRight:
 		return strings.Repeat(" ", padding) + truncated
-	default:
+	case alignLeft:
 		return truncated + strings.Repeat(" ", padding)
 	}
+	panic(fmt.Sprintf("unhandled alignKind: %d", align))
 }
 
 func visibleRange(total, height, cursor int) (int, int) {

@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -92,9 +93,10 @@ func (m *Model) syncIndicator() string {
 		return appStyles.SyncOffline().Render("\u25cb")
 	case syncConflict:
 		return appStyles.SyncConflict().Render("!")
-	default:
+	case syncIdle:
 		return ""
 	}
+	panic(fmt.Sprintf("unhandled syncStatus: %d", m.syncStatus))
 }
 
 // withSyncIndicator prepends the sync glyph to the status bar output.

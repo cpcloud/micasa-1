@@ -137,7 +137,7 @@ func (m *Model) promptHardDelete() {
 	}
 	switch tab.Kind {
 	case tabIncidents, tabMaintenance:
-	default:
+	case tabProjects, tabQuotes, tabAppliances, tabVendors, tabDocuments:
 		return
 	}
 	meta, ok := m.selectedRowMeta()

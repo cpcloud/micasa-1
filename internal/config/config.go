@@ -431,7 +431,7 @@ func setFieldFromEnv(fv reflect.Value, envVar, val string) error {
 }
 
 func setFieldFromEnvPtr(fv reflect.Value, envVar, val string) error {
-	switch fv.Type().Elem().Kind() {
+	switch fv.Type().Elem().Kind() { //nolint:exhaustive // only config-relevant kinds
 	case reflect.Bool:
 		b, err := strconv.ParseBool(val)
 		if err != nil {
@@ -590,7 +590,7 @@ func formatValue(v reflect.Value) (string, error) {
 		return val.String(), nil
 	}
 
-	switch v.Kind() {
+	switch v.Kind() { //nolint:exhaustive // only config-relevant kinds
 	case reflect.String:
 		return v.String(), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:

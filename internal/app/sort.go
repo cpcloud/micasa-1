@@ -4,6 +4,7 @@
 package app
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,9 +129,10 @@ func compareCells(tab *Tab, col, a, b int) int {
 			return cmpOrdered(strings.ToLower(va), strings.ToLower(vb))
 		}
 		return cmpOrdered(na, nb)
-	default:
+	case cellText, cellStatus, cellNotes, cellEntity:
 		return cmpOrdered(strings.ToLower(va), strings.ToLower(vb))
 	}
+	panic(fmt.Sprintf("unhandled cellKind: %d", kind))
 }
 
 // withPKTiebreaker appends a PK (col 0) ascending entry if col 0 is not

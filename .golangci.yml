@@ -46,7 +46,7 @@ linters:
 
   settings:
     exhaustive:
-      default-signifies-exhaustive: true
+      default-signifies-exhaustive: false
 
     goconst:
       min-occurrences: 5

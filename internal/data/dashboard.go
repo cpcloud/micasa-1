@@ -28,13 +28,15 @@ func (s *Store) ListMaintenanceWithSchedule() ([]MaintenanceItem, error) {
 // SeasonForMonth returns the season constant for a given calendar month.
 // Northern hemisphere: Mar-May spring, Jun-Aug summer, Sep-Nov fall, Dec-Feb winter.
 func SeasonForMonth(m time.Month) string {
-	switch m {
+	switch m { //nolint:exhaustive // time.Month is a stdlib int alias; all 12 named months covered
 	case time.March, time.April, time.May:
 		return SeasonSpring
 	case time.June, time.July, time.August:
 		return SeasonSummer
 	case time.September, time.October, time.November:
 		return SeasonFall
+	case time.December, time.January, time.February:
+		return SeasonWinter
 	default:
 		return SeasonWinter
 	}

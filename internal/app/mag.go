@@ -31,7 +31,8 @@ func magFormat(c cell, includeUnit bool, currencySymbol string) string {
 	switch c.Kind {
 	case cellMoney, cellDrilldown, cellOps:
 		// Definitely numeric; continue to parsing below.
-	default:
+	case cellText, cellReadonly, cellDate, cellStatus, cellWarranty,
+		cellUrgency, cellNotes, cellEntity:
 		return value
 	}
 
