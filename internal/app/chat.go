@@ -799,6 +799,9 @@ func (m *Model) handleSQLResult(msg sqlResultMsg) tea.Cmd {
 	}
 
 	m.chat.StreamCh = ch
+	if m.chat.CancelFn != nil {
+		m.chat.CancelFn()
+	}
 	m.chat.CancelFn = cancel
 	// The assistant message already exists from stage 1; we'll populate its Content field.
 	m.refreshChatViewport()
@@ -824,6 +827,9 @@ func (m *Model) startFallbackStream(question string) tea.Cmd {
 	}
 
 	m.chat.StreamCh = ch
+	if m.chat.CancelFn != nil {
+		m.chat.CancelFn()
+	}
 	m.chat.CancelFn = cancel
 	m.chat.Messages = append(m.chat.Messages, chatMessage{
 		Role: roleAssistant, Content: "",
@@ -928,6 +934,7 @@ func (m *Model) replaceAssistantWithError(errMsg string) {
 // handleSQLStreamStarted processes the initial SQL stream setup.
 func (m *Model) handleSQLStreamStarted(msg sqlStreamStartedMsg) tea.Cmd {
 	if msg.Err != nil {
+		msg.CancelFn()
 		m.chat.Streaming = false
 		m.chat.StreamingSQL = false
 		m.removeLastNotice()
@@ -959,7 +966,10 @@ func (m *Model) handleSQLChunk(msg sqlChunkMsg) tea.Cmd {
 	if msg.Err != nil {
 		m.chat.Streaming = false
 		m.chat.StreamingSQL = false
-		m.chat.CancelFn = nil
+		if m.chat.CancelFn != nil {
+			m.chat.CancelFn()
+			m.chat.CancelFn = nil
+		}
 		m.removeLastNotice()
 		m.replaceAssistantWithError(msg.Err.Error())
 		return nil
@@ -988,6 +998,10 @@ func (m *Model) handleSQLChunk(msg sqlChunkMsg) tea.Cmd {
 
 		if sql == "" {
 			m.chat.Streaming = false
+			if m.chat.CancelFn != nil {
+				m.chat.CancelFn()
+				m.chat.CancelFn = nil
+			}
 			m.replaceAssistantWithError("LLM returned empty SQL")
 			return nil
 		}
