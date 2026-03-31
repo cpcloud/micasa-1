@@ -26,20 +26,22 @@
 {{- end }}
 
 {{ if or $prev $next }}
-<div class="docs-pager">
+<nav class="docs-pager" aria-label="Previous and next pages">
   {{ with $prev }}
-    <a href="{{ .RelPermalink }}">
-      <span class="pager-label">&larr; Previous</span>
-      {{ .LinkTitle }}
+    <a href="{{ .RelPermalink }}" class="docs-pager__card docs-pager__card--prev" aria-label="Previous page: {{ .LinkTitle }}">
+      <span class="docs-pager__eyebrow">&larr; Previous</span>
+      <span class="docs-pager__title">{{ .LinkTitle }}</span>
     </a>
   {{ else }}
-    <span></span>
+    <span class="docs-pager__ghost" aria-hidden="true"></span>
   {{ end }}
   {{ with $next }}
-    <a href="{{ .RelPermalink }}" class="next">
-      <span class="pager-label">Next &rarr;</span>
-      {{ .LinkTitle }}
+    <a href="{{ .RelPermalink }}" class="docs-pager__card docs-pager__card--next" aria-label="Next page: {{ .LinkTitle }}">
+      <span class="docs-pager__eyebrow">Next &rarr;</span>
+      <span class="docs-pager__title">{{ .LinkTitle }}</span>
     </a>
+  {{ else }}
+    <span class="docs-pager__ghost" aria-hidden="true"></span>
   {{ end }}
-</div>
+</nav>
 {{ end }}

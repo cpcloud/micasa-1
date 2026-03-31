@@ -73,6 +73,16 @@
   display: block;
 }
 
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+
+.github-link svg {
+  display: block;
+}
+
 /* --- Sun arc: rests upper-right in light, hides behind house in dark --- */
 
 .sun-x {

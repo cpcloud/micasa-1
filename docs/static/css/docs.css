@@ -30,6 +30,7 @@ body {
 /* ── Layout ────────────────────────────────────────────────── */
 
 .docs-layout {
+  --docs-sidebar-width: 236px;
   display: flex;
   min-height: 100vh;
 }
@@ -37,15 +38,15 @@ body {
 /* ── Sidebar ───────────────────────────────────────────────── */
 
 .docs-sidebar {
-  width: 260px;
+  width: var(--docs-sidebar-width);
   flex-shrink: 0;
   background: var(--linen);
   border-right: 1px solid var(--rule);
-  padding: 2rem 0;
+  padding: 0;
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
+  overflow-y: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -54,9 +55,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem 1.5rem;
+  padding: 1rem;
   border-bottom: 1px solid var(--rule);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .sidebar-brand-link {
@@ -275,7 +276,7 @@ body {
 }
 
 .sidebar-section {
-  padding: 0.5rem 1.5rem 0.25rem;
+  padding: 0.4rem 1rem 0.2rem;
   font-family: "JetBrains Mono", monospace;
   font-size: 0.65rem;
   text-transform: uppercase;
@@ -292,12 +293,12 @@ body {
 .sidebar-nav ul {
   list-style: none;
   padding: 0;
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.35rem;
 }
 
 .sidebar-nav a {
   display: block;
-  padding: 0.25rem 1.5rem;
+  padding: 0.2rem 1rem;
   font-size: 0.88rem;
   color: var(--charcoal-soft);
   text-decoration: none;
@@ -315,10 +316,13 @@ body {
 
 .sidebar-external {
   margin-top: auto;
-  padding: 1rem 1.5rem;
+  min-height: 3.1rem;
+  padding: 0 1rem;
   border-top: 1px solid var(--rule);
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
 }
 
 .sidebar-external a {
@@ -337,7 +341,7 @@ body {
 .docs-main {
   flex: 1;
   min-width: 0;
-  padding: 2.5rem 3rem 4rem;
+  padding: 2.25rem 2.5rem 2rem;
   max-width: 1100px;
 }
 
@@ -425,25 +429,25 @@ body {
 
 .docs-main h1 {
   font-size: 2rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   letter-spacing: -0.02em;
 }
 
 .docs-main h2 {
   font-size: 1.5rem;
-  margin: 2.5rem 0 1rem;
+  margin: 2.25rem 0 0.9rem;
   padding-bottom: 0.4rem;
   border-bottom: 1px solid var(--rule);
 }
 
 .docs-main h3 {
   font-size: 1.15rem;
-  margin: 2rem 0 0.75rem;
+  margin: 1.75rem 0 0.7rem;
 }
 
 .docs-main h4 {
   font-size: 1rem;
-  margin: 1.5rem 0 0.5rem;
+  margin: 1.35rem 0 0.45rem;
 }
 
 /* ── Table of contents (right rail) ────────────────────────── */
@@ -451,12 +455,12 @@ body {
 .toc-rail {
   width: 200px;
   flex-shrink: 0;
-  padding: 2.5rem 1rem 2rem 0;
+  padding: 2.25rem 1rem 2rem 0;
 }
 
 .toc {
   position: sticky;
-  top: 2rem;
+  top: 1.75rem;
   font-size: 0.75rem;
   line-height: 1.5;
 }
@@ -873,33 +877,34 @@ h2:hover .badge-experimental .badge-label {
 /* ── Prev / Next navigation ────────────────────────────────── */
 
 .docs-pager {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 3rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--rule);
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
-.docs-pager a {
+.docs-pager__card,
+.docs-pager__ghost {
+  min-width: 0;
+}
+
+.docs-pager__card {
   display: block;
-  padding: 0.6rem 1rem;
-  background: var(--linen);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
+  padding: 0.2rem 0 0.2rem 0.9rem;
+  border-left: 2px solid transparent;
   text-decoration: none;
-  font-size: 0.88rem;
-  color: var(--charcoal);
-  transition: background 0.15s, border-color 0.15s;
+  color: var(--charcoal-soft);
+  transition: border-color 0.15s, color 0.15s;
 }
 
-.docs-pager a:hover {
-  background: var(--rule);
-  border-color: var(--warm-gray);
-  color: var(--charcoal);
+.docs-pager__card:hover {
+  border-color: var(--terracotta);
+  color: var(--terracotta);
 }
 
-.docs-pager .pager-label {
+.docs-pager__eyebrow {
   display: block;
   font-family: "JetBrains Mono", monospace;
   font-size: 0.65rem;
@@ -909,28 +914,27 @@ h2:hover .badge-experimental .badge-label {
   margin-bottom: 0.15rem;
 }
 
-.docs-pager .next {
+.docs-pager__title {
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.docs-pager__card--next {
   text-align: right;
-  margin-left: auto;
+  padding: 0.2rem 0.9rem 0.2rem 0;
+  border-left: none;
+  border-right: 2px solid transparent;
 }
 
-/* ── Footer ────────────────────────────────────────────────── */
-
-.docs-footer {
-  margin-top: 3rem;
-  padding: 1.5rem 0;
-  border-top: 1px solid var(--rule);
-  text-align: center;
-  color: var(--warm-gray);
-  font-size: 0.8rem;
+.docs-pager__ghost {
+  visibility: hidden;
 }
 
-.docs-footer a {
-  color: var(--warm-gray);
-}
-
-.docs-footer a:hover {
-  color: var(--terracotta);
+@media (max-height: 820px) {
+  .docs-sidebar {
+    overflow-y: auto;
+  }
 }
 
 /* ── Tab pill ──────────────────────────────────────────────── */
@@ -969,9 +973,12 @@ h2:hover .badge-experimental .badge-label {
 
   .docs-sidebar {
     position: fixed;
-    left: -280px;
+    left: calc(-1 * var(--docs-sidebar-width) - 20px);
     top: 0;
     z-index: 100;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 0;
     transition: left 0.25s ease;
     box-shadow: none;
   }
@@ -982,16 +989,23 @@ h2:hover .badge-experimental .badge-label {
   }
 
   .docs-main {
-    padding: 1.5rem;
+    padding: 1.5rem 1.5rem 1.25rem;
   }
 
   .docs-pager {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
 
-  .docs-pager .next {
+  .docs-pager__card--next {
     text-align: left;
-    margin-left: 0;
+    padding: 0.2rem 0 0.2rem 0.9rem;
+    border-right: none;
+    border-left: 2px solid transparent;
+  }
+
+  .docs-pager__ghost {
+    display: none;
   }
 
   .toc-rail {

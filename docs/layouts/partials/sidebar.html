@@ -25,7 +25,7 @@
 
     <div class="sidebar-external">
       <a href="{{ "blog/" | relURL }}">Blog</a>
-      <a href="https://github.com/micasa-dev/micasa">GitHub</a>
+      {{ partial "github-link.html" (dict "class" "github-link") }}
     </div>
   </div>
 </nav>

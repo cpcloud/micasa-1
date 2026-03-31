@@ -33,6 +33,10 @@ body {
 /* -- Header ------------------------------------------------- */
 
 .blog-header {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: var(--cream);
   border-bottom: 1px solid var(--rule);
   padding: 1rem 0;
 }
@@ -303,11 +307,17 @@ kbd {
 
 .blog-footer {
   margin-top: auto;
-  padding: 1.5rem;
-  text-align: center;
+  padding: 1.12rem 1.5rem;
   color: var(--warm-gray);
   font-size: 0.8rem;
   border-top: 1px solid var(--rule);
+}
+
+.blog-footer-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
 }
 
 .blog-footer a {
@@ -317,6 +327,10 @@ kbd {
 
 .blog-footer a:hover {
   color: var(--terracotta);
+}
+
+.blog-footer .footer-sep {
+  line-height: 1;
 }
 
 /* -- Tab pill ------------------------------------------------ */
