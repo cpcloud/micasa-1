@@ -584,7 +584,7 @@ func TestDashboardOverlayDimsSurroundingContent(t *testing.T) {
 	// (the tab underline, table headers, etc.) should carry the ANSI faint
 	// attribute (\033[2m). Verify no line contains the tab underline
 	// character without being wrapped in faint.
-	for _, line := range strings.Split(view, "\n") {
+	for line := range strings.SplitSeq(view, "\n") {
 		if strings.Contains(line, "━") {
 			assert.Contains(t, line, "\033[2m",
 				"tab underline should be dimmed in overlay")
@@ -602,7 +602,7 @@ func TestDashboardHiddenWhenEmpty(t *testing.T) {
 
 	view := m.buildView()
 	// Empty dashboard should not show the overlay — no dimming.
-	for _, line := range strings.Split(view, "\n") {
+	for line := range strings.SplitSeq(view, "\n") {
 		if strings.Contains(line, "━") {
 			assert.NotContains(t, line, "\033[2m",
 				"empty dashboard should not dim the background")
@@ -688,7 +688,7 @@ func TestRenderMiniTable(t *testing.T) {
 			{Text: "7", Style: lipgloss.NewStyle(), Align: alignRight},
 		}},
 	}
-	lines := renderMiniTable(nil, rows, 3, 0, -1, lipgloss.NewStyle(), lipgloss.NewStyle())
+	lines := renderMiniTable(nil, rows, 0, -1, lipgloss.NewStyle(), lipgloss.NewStyle())
 	require.Len(t, lines, 2)
 	// Both lines should have the same visible width due to column alignment.
 	assert.Equal(t, lipgloss.Width(lines[0]), lipgloss.Width(lines[1]))
@@ -709,7 +709,7 @@ func TestRenderMiniTableUnicode(t *testing.T) {
 				{Text: "in 14 days", Style: plain, Align: alignRight},
 			}},
 		}
-		lines := renderMiniTable(nil, rows, 3, 0, -1, plain, plain)
+		lines := renderMiniTable(nil, rows, 0, -1, plain, plain)
 		require.Len(t, lines, 2)
 		assert.Equal(t, lipgloss.Width(lines[0]), lipgloss.Width(lines[1]),
 			"rows with accented characters should align")
@@ -727,7 +727,7 @@ func TestRenderMiniTableUnicode(t *testing.T) {
 				{Text: "$1,000", Style: plain, Align: alignRight},
 			}},
 		}
-		lines := renderMiniTable(nil, rows, 3, 0, -1, plain, plain)
+		lines := renderMiniTable(nil, rows, 0, -1, plain, plain)
 		require.Len(t, lines, 2)
 		assert.Equal(t, lipgloss.Width(lines[0]), lipgloss.Width(lines[1]),
 			"rows with CJK characters should align")
@@ -744,7 +744,7 @@ func TestRenderMiniTableUnicode(t *testing.T) {
 				{Text: "pending", Style: plain},
 			}},
 		}
-		lines := renderMiniTable(nil, rows, 3, 0, -1, plain, plain)
+		lines := renderMiniTable(nil, rows, 0, -1, plain, plain)
 		require.Len(t, lines, 2)
 		assert.Equal(t, lipgloss.Width(lines[0]), lipgloss.Width(lines[1]),
 			"rows with emoji should align")
@@ -766,12 +766,12 @@ func TestRenderMiniTableTruncatesOnNarrowWidth(t *testing.T) {
 	}
 
 	// Without width cap, rows are as wide as content demands.
-	uncapped := renderMiniTable(nil, rows, 3, 0, -1, plain, plain)
+	uncapped := renderMiniTable(nil, rows, 0, -1, plain, plain)
 	require.Len(t, uncapped, 2)
 	uncappedWidth := lipgloss.Width(uncapped[0])
 
 	// With a tight width cap, rows should be truncated.
-	capped := renderMiniTable(nil, rows, 3, 40, -1, plain, plain)
+	capped := renderMiniTable(nil, rows, 40, -1, plain, plain)
 	require.Len(t, capped, 2)
 	for i, line := range capped {
 		w := lipgloss.Width(line)
@@ -800,6 +800,7 @@ func TestTruncateToWidth(t *testing.T) {
 			text: "hello",
 			maxW: 10,
 			check: func(t *testing.T, result string) {
+				t.Helper()
 				assert.Equal(t, "hello", result)
 			},
 		},
@@ -808,6 +809,7 @@ func TestTruncateToWidth(t *testing.T) {
 			text: "very long text here",
 			maxW: 10,
 			check: func(t *testing.T, result string) {
+				t.Helper()
 				assert.LessOrEqual(t, lipgloss.Width(result), 10)
 				assert.Contains(t, result, "\u2026")
 			},
@@ -817,6 +819,7 @@ func TestTruncateToWidth(t *testing.T) {
 			text: "\u6771\u829d\u88fd\u54c1\u682a\u5f0f\u4f1a\u793e", // 東芝製品株式会社
 			maxW: 8,
 			check: func(t *testing.T, result string) {
+				t.Helper()
 				assert.LessOrEqual(t, lipgloss.Width(result), 8)
 				assert.Contains(t, result, "\u2026")
 			},
@@ -826,6 +829,7 @@ func TestTruncateToWidth(t *testing.T) {
 			text: "hello",
 			maxW: 1,
 			check: func(t *testing.T, result string) {
+				t.Helper()
 				assert.Equal(t, "\u2026", result)
 			},
 		},
@@ -834,6 +838,7 @@ func TestTruncateToWidth(t *testing.T) {
 			text: "hello",
 			maxW: 0,
 			check: func(t *testing.T, result string) {
+				t.Helper()
 				assert.Empty(t, result)
 			},
 		},

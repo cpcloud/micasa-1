@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -334,15 +335,15 @@ func TestChatStreamSuccess(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var content string
+	var content strings.Builder
 	for chunk := range ch {
 		require.NoError(t, chunk.Err)
-		content += chunk.Content
+		content.WriteString(chunk.Content)
 		if chunk.Done {
 			break
 		}
 	}
-	assert.Equal(t, "Hello world", content)
+	assert.Equal(t, "Hello world", content.String())
 }
 
 func TestChatStreamCancellation(t *testing.T) {
@@ -435,7 +436,7 @@ func TestPingServerDownCloud(t *testing.T) {
 	// Use wrapError directly: a ECONNREFUSED wrapped in ProviderError
 	// from a cloud provider should say "cannot reach ... check your
 	// base_url" and NOT mention ollama.
-	inner := fmt.Errorf("dial tcp: connection refused")
+	inner := errors.New("dial tcp: connection refused")
 	c := &Client{providerName: "openai"}
 	err := c.wrapError(anyllmerrors.NewProviderError("openai", inner))
 	require.Error(t, err)
@@ -496,7 +497,7 @@ func TestCreateProviderAllSupported(t *testing.T) {
 // TestWrapErrorProviderError exercises the wrapError path for ProviderError.
 func TestWrapErrorProviderError(t *testing.T) {
 	t.Parallel()
-	connErr := fmt.Errorf("dial tcp: connection refused")
+	connErr := errors.New("dial tcp: connection refused")
 	tests := []struct {
 		provider string
 		wantMsg  string
@@ -548,7 +549,7 @@ func TestWrapErrorDeadlineExceeded(t *testing.T) {
 
 // TestWrapErrorProviderErrorPreservesNonConnectionErrors verifies that
 // ProviderErrors NOT caused by connection failures pass through the
-// original error message instead of showing "cannot reach."
+// original error message instead of showing "cannot reach.".
 func TestWrapErrorProviderErrorPreservesNonConnectionErrors(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -583,7 +584,7 @@ func TestWrapErrorModelNotFound(t *testing.T) {
 	t.Run("ollama suggests pull", func(t *testing.T) {
 		c := &Client{providerName: "ollama", model: "qwen3"}
 		err := c.wrapError(
-			anyllmerrors.NewModelNotFoundError("ollama", fmt.Errorf("not found")),
+			anyllmerrors.NewModelNotFoundError("ollama", errors.New("not found")),
 		)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ollama pull qwen3")
@@ -592,7 +593,7 @@ func TestWrapErrorModelNotFound(t *testing.T) {
 		c := &Client{providerName: "anthropic", model: "claude-opus-4-6"}
 		err := c.wrapError(
 			anyllmerrors.NewModelNotFoundError(
-				"anthropic", fmt.Errorf("not found"),
+				"anthropic", errors.New("not found"),
 			),
 		)
 		require.Error(t, err)
@@ -607,7 +608,7 @@ func TestWrapErrorAuthenticationError(t *testing.T) {
 	t.Parallel()
 	c := &Client{providerName: "anthropic"}
 	err := c.wrapError(
-		anyllmerrors.NewAuthenticationError("anthropic", fmt.Errorf("invalid key")),
+		anyllmerrors.NewAuthenticationError("anthropic", errors.New("invalid key")),
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "authentication failed")
@@ -620,7 +621,7 @@ func TestWrapErrorRateLimitError(t *testing.T) {
 	t.Parallel()
 	c := &Client{providerName: "openai"}
 	err := c.wrapError(
-		anyllmerrors.NewRateLimitError("openai", fmt.Errorf("429")),
+		anyllmerrors.NewRateLimitError("openai", errors.New("429")),
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rate limited")
@@ -638,7 +639,7 @@ func TestWrapErrorNil(t *testing.T) {
 func TestWrapErrorGeneric(t *testing.T) {
 	t.Parallel()
 	c := &Client{providerName: "ollama"}
-	orig := fmt.Errorf("something unexpected")
+	orig := errors.New("something unexpected")
 	err := c.wrapError(orig)
 	assert.Equal(t, orig, err)
 }
@@ -834,7 +835,7 @@ func (m *mockModelLister) Completion(
 	_ context.Context,
 	_ anyllm.CompletionParams,
 ) (*anyllm.ChatCompletion, error) {
-	return nil, fmt.Errorf("not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (m *mockModelLister) CompletionStream(
@@ -951,15 +952,15 @@ func TestHTTPStreamingSurvivesPastQuickOpTimeout(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		var content string
+		var content strings.Builder
 		for chunk := range ch {
 			require.NoError(t, chunk.Err)
-			content += chunk.Content
+			content.WriteString(chunk.Content)
 			if chunk.Done {
 				break
 			}
 		}
-		assert.Equal(t, "Hello world", content)
+		assert.Equal(t, "Hello world", content.String())
 	})
 }
 

@@ -49,7 +49,7 @@ func TestOptionalIntRejectsInvalid(t *testing.T) {
 
 func TestOptionalIntervalAcceptsValid(t *testing.T) {
 	t.Parallel()
-	validate := optionalInterval("interval")
+	validate := optionalInterval()
 	for _, input := range []string{"", "0", "12", "6m", "1y", "2y 6m", "1y6m", "  1Y  "} {
 		assert.NoErrorf(t, validate(input), "optionalInterval(%q)", input)
 	}
@@ -57,7 +57,7 @@ func TestOptionalIntervalAcceptsValid(t *testing.T) {
 
 func TestOptionalIntervalRejectsInvalid(t *testing.T) {
 	t.Parallel()
-	validate := optionalInterval("interval")
+	validate := optionalInterval()
 	for _, input := range []string{"abc", "-1", "1x", "m", "y"} {
 		err := validate(input)
 		require.Errorf(t, err, "optionalInterval(%q) expected error", input)
@@ -154,14 +154,14 @@ func TestOptionalMoneyRejectsInvalid(t *testing.T) {
 func TestRequiredMoneyAcceptsValid(t *testing.T) {
 	t.Parallel()
 	cur := locale.DefaultCurrency()
-	validate := requiredMoney("total", cur)
+	validate := requiredMoney(cur)
 	assert.NoError(t, validate("1250.00"))
 }
 
 func TestRequiredMoneyRejectsEmpty(t *testing.T) {
 	t.Parallel()
 	cur := locale.DefaultCurrency()
-	validate := requiredMoney("total", cur)
+	validate := requiredMoney(cur)
 	assert.Error(t, validate(""))
 }
 
@@ -402,8 +402,7 @@ func TestFormDataStructsHaveNoReferenceFields(t *testing.T) {
 	for _, s := range structs {
 		rt := reflect.TypeOf(s)
 		t.Run(rt.Name(), func(t *testing.T) {
-			for i := range rt.NumField() {
-				f := rt.Field(i)
+			for f := range rt.Fields() {
 				switch f.Type.Kind() { //nolint:exhaustive // only reference kinds matter here
 				case reflect.Ptr, reflect.Slice, reflect.Map,
 					reflect.Chan, reflect.Func, reflect.Interface:

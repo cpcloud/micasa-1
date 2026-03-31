@@ -5,6 +5,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,7 +16,7 @@ import (
 // needed for online backups. The driver's conn type is unexported, so we
 // assert this interface instead.
 type backupConn interface {
-	NewBackup(string) (*sqlite.Backup, error)
+	NewBackup(destPath string) (*sqlite.Backup, error)
 }
 
 // Backup creates a consistent snapshot of the database at destPath using
@@ -37,7 +38,7 @@ func (s *Store) Backup(ctx context.Context, destPath string) error {
 	if err := conn.Raw(func(driverConn any) error {
 		b, ok := driverConn.(backupConn)
 		if !ok {
-			return fmt.Errorf(
+			return errors.New(
 				"SQLite driver does not support the backup API -- please report this as a bug",
 			)
 		}
@@ -65,7 +66,7 @@ func (s *Store) Backup(ctx context.Context, destPath string) error {
 		return err
 	}
 
-	if err := verifyBackup(destPath); err != nil {
+	if err := verifyBackup(ctx, destPath); err != nil {
 		return err
 	}
 
@@ -78,15 +79,17 @@ func (s *Store) Backup(ctx context.Context, destPath string) error {
 
 // verifyBackup opens the backup and runs PRAGMA integrity_check to confirm
 // the database is internally consistent.
-func verifyBackup(path string) error {
-	backup, err := Open(path)
+func verifyBackup(ctx context.Context, path string) error {
+	backup, err := Open(
+		path,
+	)
 	if err != nil {
 		return fmt.Errorf("open backup for verification: %w", err)
 	}
 	defer func() { _ = backup.Close() }()
 
 	var result string
-	if err := backup.db.Raw("PRAGMA integrity_check").Scan(&result).Error; err != nil {
+	if err := backup.db.WithContext(ctx).Raw("PRAGMA integrity_check").Scan(&result).Error; err != nil {
 		return fmt.Errorf("integrity check failed: %w", err)
 	}
 	if result != "ok" {

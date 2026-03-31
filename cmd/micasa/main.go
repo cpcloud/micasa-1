@@ -237,7 +237,7 @@ func launchTUI(dbPath string, seed *seedOpts) error {
 
 // resolveDBPath returns the database path to use. Precedence:
 // 1. Explicit positional arg (opts.dbPath)
-// 2. data.DefaultDBPath(), which honors MICASA_DB_PATH env var internally
+// 2. data.DefaultDBPath(), which honors MICASA_DB_PATH env var internally.
 func (opts *runOpts) resolveDBPath() (string, error) {
 	if opts.dbPath != "" {
 		return data.ExpandHome(opts.dbPath), nil
@@ -282,7 +282,7 @@ func (opts *demoOpts) resolveDBPath() string {
 
 func runDemo(opts *demoOpts) error {
 	if opts.years < 0 {
-		return fmt.Errorf("--years must be non-negative")
+		return errors.New("--years must be non-negative")
 	}
 	if opts.seedOnly {
 		return runSeedOnly(opts)
@@ -295,7 +295,7 @@ func runDemo(opts *demoOpts) error {
 func runSeedOnly(opts *demoOpts) error {
 	dbPath := opts.resolveDBPath()
 	if dbPath == ":memory:" {
-		return fmt.Errorf("--seed-only requires a database path")
+		return errors.New("--seed-only requires a database path")
 	}
 	store, err := data.Open(dbPath)
 	if err != nil {
@@ -338,7 +338,7 @@ func newBackupCmd() *cobra.Command {
 // resolveBackupSource returns the source database path for backup. Precedence:
 // 1. Explicit --source flag
 // 2. MICASA_DB_PATH env var (passed via opts.envDBPath)
-// 3. data.DefaultDBPath() platform default
+// 3. data.DefaultDBPath() platform default.
 func (opts *backupOpts) resolveBackupSource() (string, error) {
 	if opts.source != "" {
 		return data.ExpandHome(opts.source), nil
@@ -355,7 +355,7 @@ func runBackup(w io.Writer, opts *backupOpts) error {
 		return fmt.Errorf("resolve source path: %w", err)
 	}
 	if sourcePath == ":memory:" {
-		return fmt.Errorf("cannot back up an in-memory database")
+		return errors.New("cannot back up an in-memory database")
 	}
 	if _, err := os.Stat(sourcePath); err != nil {
 		return fmt.Errorf(

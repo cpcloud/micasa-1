@@ -5,6 +5,7 @@ package app
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -372,7 +373,7 @@ func (m *Model) startQuoteForm() error {
 		return err
 	}
 	if len(projects) == 0 {
-		return fmt.Errorf("add a project before adding quotes")
+		return errors.New("add a project before adding quotes")
 	}
 	values := &quoteFormData{}
 	options := projectOptions(projects)
@@ -391,7 +392,7 @@ func (m *Model) startQuoteForm() error {
 				Title(requiredTitle("Total")).
 				Placeholder("3250.00").
 				Value(&values.Total).
-				Validate(requiredMoney("total", m.cur)),
+				Validate(requiredMoney(m.cur)),
 		),
 	)
 	m.activateForm(form, values)
@@ -408,7 +409,7 @@ func (m *Model) startEditQuoteForm(id string) error {
 		return err
 	}
 	if len(projects) == 0 {
-		return fmt.Errorf("no projects available")
+		return errors.New("no projects available")
 	}
 	values := quoteFormValues(quote, m.cur)
 	options := projectOptions(projects)
@@ -438,7 +439,7 @@ func (m *Model) openQuoteForm(values *quoteFormData, projectOpts []huh.Option[st
 				Title(requiredTitle("Total")).
 				Placeholder("3250.00").
 				Value(&values.Total).
-				Validate(requiredMoney("total", m.cur)),
+				Validate(requiredMoney(m.cur)),
 			huh.NewInput().
 				Title("Labor").
 				Placeholder("2000.00").
@@ -511,7 +512,7 @@ func (m *Model) startMaintenanceForm() error {
 				Title("Interval").
 				Placeholder("6m").
 				Value(&values.IntervalMonths).
-				Validate(optionalInterval("interval")),
+				Validate(optionalInterval()),
 		).WithHideFunc(func() bool { return values.ScheduleType != schedInterval }),
 		huh.NewGroup(
 			huh.NewInput().
@@ -578,7 +579,7 @@ func (m *Model) openMaintenanceForm(
 				Title("Interval").
 				Placeholder("6m").
 				Value(&values.IntervalMonths).
-				Validate(optionalInterval("interval")),
+				Validate(optionalInterval()),
 		).WithHideFunc(func() bool { return values.ScheduleType != schedInterval }),
 		huh.NewGroup(
 			huh.NewInput().
@@ -1235,7 +1236,7 @@ var quoteInlineSpecs = map[int]inlineColSpec{
 	int(quoteColTotal): {
 		kind: ieMoney, title: "Total", placeholder: "3250.00",
 		fieldPtr: func(d formData) *string { return &mustAssert[*quoteFormData](d).Total },
-		validate: func(m *Model) func(string) error { return requiredMoney("total", m.cur) },
+		validate: func(m *Model) func(string) error { return requiredMoney(m.cur) },
 	},
 	int(quoteColLabor): {
 		kind: ieMoney, title: "Labor", placeholder: "2000.00",
@@ -1312,7 +1313,7 @@ var maintenanceInlineSpecs = map[int]inlineColSpec{
 	int(maintenanceColEvery): {
 		kind: ieText, title: "Interval", placeholder: "6m",
 		fieldPtr: func(d formData) *string { return &mustAssert[*maintenanceFormData](d).IntervalMonths },
-		validate: func(*Model) func(string) error { return optionalInterval("interval") },
+		validate: func(*Model) func(string) error { return optionalInterval() },
 		beforeEdit: func(d formData) {
 			v := mustAssert[*maintenanceFormData](d)
 			v.ScheduleType = schedInterval
@@ -2191,8 +2192,8 @@ func optionalInt(label string) func(string) error {
 	return validateWith(label, data.ParseOptionalInt)
 }
 
-func optionalInterval(label string) func(string) error {
-	return validateWith(label, data.ParseIntervalMonths)
+func optionalInterval() func(string) error {
+	return validateWith("interval", data.ParseIntervalMonths)
 }
 
 func optionalFloat(label string) func(string) error {
@@ -2220,7 +2221,7 @@ func endDateAfterStart(startDate, endDate *string) func(string) error {
 			return nil //nolint:nilerr // end date format already checked by optionalDate above
 		}
 		if e.Before(*s) {
-			return fmt.Errorf("end date must not be before start date")
+			return errors.New("end date must not be before start date")
 		}
 		return nil
 	}
@@ -2234,8 +2235,8 @@ func optionalMoney(label string, cur locale.Currency) func(string) error {
 	return validateWith(label, cur.ParseOptionalCents)
 }
 
-func requiredMoney(label string, cur locale.Currency) func(string) error {
-	return validateWith(label, cur.ParseRequiredCents)
+func requiredMoney(cur locale.Currency) func(string) error {
+	return validateWith("total", cur.ParseRequiredCents)
 }
 
 func projectFormValues(project data.Project, cur locale.Currency) *projectFormData {
@@ -2438,7 +2439,7 @@ func (m *Model) startDocumentForm(entityKind string) error {
 // startQuickDocumentForm opens a minimal document form that only asks for a
 // file path. Title and notes are auto-filled by the extraction pipeline on
 // submit, making this the fast path for ingesting files.
-func (m *Model) startQuickDocumentForm() error {
+func (m *Model) startQuickDocumentForm() {
 	values := &documentFormData{DeferCreate: true}
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -2447,7 +2448,6 @@ func (m *Model) startQuickDocumentForm() error {
 		),
 	)
 	m.activateForm(form, values)
-	return nil
 }
 
 func (m *Model) startEditDocumentForm(id string) error {
@@ -2498,10 +2498,7 @@ func (m *Model) openEditDocumentForm(values *documentFormData, scoped bool) erro
 // newDocumentFilePicker creates a file picker pre-configured for document
 // uploads: files only, hidden files shown, height scaled to the terminal.
 func (m *Model) newDocumentFilePicker(title string) *huh.FilePicker {
-	h := m.height / 3
-	if h < 5 {
-		h = 5
-	}
+	h := max(m.height/3, 5)
 	// Use the configured starting directory (defaults to ~/Downloads).
 	// Fall back to cwd if the configured dir is empty.
 	dir := m.filePickerDir
@@ -2589,13 +2586,13 @@ func (m *Model) parseDocumentFormData() (documentParseResult, error) {
 		if fileSize < 0 {
 			return documentParseResult{}, fmt.Errorf("file has invalid size %d", fileSize)
 		}
-		if uint64(fileSize) > maxSize { //nolint:gosec // negative ruled out above
+		if uint64(fileSize) > maxSize {
 			return documentParseResult{}, fmt.Errorf(
 				"file is too large (%s) -- maximum allowed is %s",
 				formatFileSize(
 					uint64(fileSize),
 				),
-				formatFileSize(maxSize), //nolint:gosec // negative ruled out above
+				formatFileSize(maxSize),
 			)
 		}
 		fileData, err := os.ReadFile(path)
@@ -2739,7 +2736,7 @@ func optionalFilePath() func(string) error {
 			return fmt.Errorf("file not found: %s", path)
 		}
 		if info.IsDir() {
-			return fmt.Errorf("path is a directory, not a file")
+			return errors.New("path is a directory, not a file")
 		}
 		return nil
 	}

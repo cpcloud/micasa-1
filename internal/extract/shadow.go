@@ -4,6 +4,7 @@
 package extract
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -146,7 +147,7 @@ func (s *ShadowDB) stageCreate(op Operation) error {
 	}
 
 	if len(cols) == 0 {
-		return fmt.Errorf("no columns to insert")
+		return errors.New("no columns to insert")
 	}
 
 	// Prepend the ordinal string as the id column.
@@ -154,7 +155,6 @@ func (s *ShadowDB) stageCreate(op Operation) error {
 	vals = append([]any{shadowID}, vals...)
 	placeholders = append([]string{"?"}, placeholders...)
 
-	//nolint:gosec // table and column names validated by validateTable and validateColumn
 	sql := fmt.Sprintf(
 		"INSERT INTO %s (%s) VALUES (%s)",
 		quoteIdent(op.Table),
@@ -364,7 +364,7 @@ func commitVendor(store *data.Store, row map[string]any) (string, error) {
 	stringField(row, data.ColWebsite, &v.Website)
 	stringField(row, data.ColNotes, &v.Notes)
 	if strings.TrimSpace(v.Name) == "" {
-		return "", fmt.Errorf("vendor name is required")
+		return "", errors.New("vendor name is required")
 	}
 	found, err := store.FindOrCreateVendor(v)
 	if err != nil {
@@ -401,7 +401,7 @@ func commitProject(store *data.Store, row map[string]any) (string, error) {
 		p.BudgetCents = v
 	}
 	if strings.TrimSpace(p.Title) == "" {
-		return "", fmt.Errorf("project title is required")
+		return "", errors.New("project title is required")
 	}
 	if p.Status == "" {
 		p.Status = data.ProjectStatusIdeating
@@ -416,7 +416,7 @@ func commitQuote(store *data.Store, row map[string]any, opData map[string]any) (
 	q := data.Quote{}
 	q.ProjectID = ParseStringID(row[data.ColProjectID])
 	if q.ProjectID == "" {
-		return "", fmt.Errorf("quote requires a project_id referencing an existing project")
+		return "", errors.New("quote requires a project_id referencing an existing project")
 	}
 	q.TotalCents = ParseInt64(row[data.ColTotalCents])
 	stringField(row, data.ColNotes, &q.Notes)
@@ -513,7 +513,7 @@ func commitIncident(store *data.Store, row map[string]any, opData map[string]any
 	}
 	inc.DateNoticed = parseDateOrNow(opData, data.ColDateNoticed)
 	if strings.TrimSpace(inc.Title) == "" {
-		return "", fmt.Errorf("incident title is required")
+		return "", errors.New("incident title is required")
 	}
 	if err := store.CreateIncident(&inc); err != nil {
 		return "", err
@@ -586,7 +586,7 @@ func commitUpdate(store *data.Store, op Operation) error {
 func commitUpdateDocument(store *data.Store, op Operation) error {
 	rowID := ParseStringID(op.Data[data.ColID])
 	if rowID == "" {
-		return fmt.Errorf("update documents requires id in data")
+		return errors.New("update documents requires id in data")
 	}
 	doc, err := store.GetDocumentMetadata(rowID)
 	if err != nil {
@@ -606,7 +606,7 @@ func commitUpdateDocument(store *data.Store, op Operation) error {
 func commitUpdateMaintenance(store *data.Store, op Operation) error {
 	rowID := ParseStringID(op.Data[data.ColID])
 	if rowID == "" {
-		return fmt.Errorf("update maintenance_items requires id in data")
+		return errors.New("update maintenance_items requires id in data")
 	}
 	item, err := store.GetMaintenance(rowID)
 	if err != nil {
@@ -643,7 +643,7 @@ func commitUpdateMaintenance(store *data.Store, op Operation) error {
 func commitUpdateVendor(store *data.Store, op Operation) error {
 	rowID := ParseStringID(op.Data[data.ColID])
 	if rowID == "" {
-		return fmt.Errorf("update vendors requires id in data")
+		return errors.New("update vendors requires id in data")
 	}
 	v, err := store.GetVendor(rowID)
 	if err != nil {
@@ -661,7 +661,7 @@ func commitUpdateVendor(store *data.Store, op Operation) error {
 func commitUpdateAppliance(store *data.Store, op Operation) error {
 	rowID := ParseStringID(op.Data[data.ColID])
 	if rowID == "" {
-		return fmt.Errorf("update appliances requires id in data")
+		return errors.New("update appliances requires id in data")
 	}
 	a, err := store.GetAppliance(rowID)
 	if err != nil {
@@ -683,7 +683,7 @@ func commitUpdateAppliance(store *data.Store, op Operation) error {
 func commitUpdateQuote(store *data.Store, op Operation) error {
 	rowID := ParseStringID(op.Data[data.ColID])
 	if rowID == "" {
-		return fmt.Errorf("update quotes requires id in data")
+		return errors.New("update quotes requires id in data")
 	}
 	q, err := store.GetQuote(rowID)
 	if err != nil {

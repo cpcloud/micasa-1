@@ -503,7 +503,7 @@ func (m *Model) navigateToLink(link *columnLink, targetID string) error {
 	m.switchToTab(tabIndex(link.TargetTab))
 	tab := m.activeTab()
 	if tab == nil {
-		return fmt.Errorf("target tab not found")
+		return errors.New("target tab not found")
 	}
 	if !selectRowByID(tab, targetID) {
 		m.setStatusError(fmt.Sprintf("Linked item %s not found (deleted?).", targetID))
@@ -691,14 +691,8 @@ func setFixedValues(specs []columnSpec, title string, values []string) {
 
 func (m *Model) resizeTables() {
 	// Chrome: 1 blank after house + 1 tab/breadcrumb row + 1 underline = 3
-	height := m.height - m.houseLines() - 3 - m.statusLines()
-	if height < 4 {
-		height = 4
-	}
-	tableHeight := height - 1
-	if tableHeight < 2 {
-		tableHeight = 2
-	}
+	height := max(m.height-m.houseLines()-3-m.statusLines(), 4)
+	tableHeight := max(height-1, 2)
 	for i := range m.tabs {
 		m.tabs[i].cachedVP = nil
 		m.tabs[i].Table.SetHeight(tableHeight)
@@ -872,10 +866,7 @@ func (m *Model) formatPullProgress(msg pullProgressMsg) string {
 	} else {
 		pct = m.pull.peak
 	}
-	barW := m.width/3 - lipgloss.Width(label) - 2
-	if barW < 15 {
-		barW = 15
-	}
+	barW := max(m.width/3-lipgloss.Width(label)-2, 15)
 	m.pull.progress.SetWidth(barW)
 	return label + " " + m.pull.progress.ViewAs(pct)
 }
@@ -1173,17 +1164,8 @@ func (m *Model) openHelp() {
 
 	// Viewport height: fit content or clamp to terminal.
 	// Chrome: border (2) + padding (2) + bottom gap (2) + rule (1) + hint (1) = 8.
-	maxH := m.effectiveHeight() - 8
-	if maxH < 3 {
-		maxH = 3
-	}
-	vpH := len(lines)
-	if vpH > maxH {
-		vpH = maxH
-	}
-	if vpH < 3 {
-		vpH = 3
-	}
+	maxH := max(m.effectiveHeight()-8, 3)
+	vpH := max(min(len(lines), maxH), 3)
 
 	vp := viewport.New(viewport.WithWidth(maxW), viewport.WithHeight(vpH))
 	vp.SetContent(content)
@@ -1303,23 +1285,14 @@ func (m *Model) effectiveHeight() int {
 // (dashboard, note preview, ops tree). Accounts for border (2), padding (4),
 // and breathing room (6) = 12 total, clamped to [30, 72].
 func (m *Model) overlayContentWidth() int {
-	w := m.effectiveWidth() - 12
-	if w > 72 {
-		w = 72
-	}
-	if w < 30 {
-		w = 30
-	}
+	w := min(m.effectiveWidth()-12, 72)
+	w = max(w, 30)
 	return w
 }
 
 // overlayMaxHeight returns the clamped maximum height for overlay boxes.
 func (m *Model) overlayMaxHeight() int {
-	h := m.effectiveHeight() - 4
-	if h < 10 {
-		h = 10
-	}
-	return h
+	return max(m.effectiveHeight()-4, 10)
 }
 
 // scrollRule renders a horizontal rule with an embedded Vim-style scroll
@@ -1831,7 +1804,7 @@ func (m *Model) launchExternalEditor() tea.Cmd {
 	}
 	if _, err := f.WriteString(*m.fs.notesFieldPtr); err != nil {
 		_ = f.Close()
-		_ = os.Remove(f.Name()) //nolint:gosec // temp file we just created
+		_ = os.Remove(f.Name())
 		m.setStatusError(fmt.Sprintf("write temp file: %s", err))
 		return nil
 	}

@@ -38,6 +38,8 @@ type chatMessage struct {
 
 // chatState holds the state of the LLM chat overlay.
 type chatState struct {
+	markdownRenderer
+
 	Messages     []chatMessage
 	Input        textinput.Model
 	Viewport     viewport.Model
@@ -54,8 +56,6 @@ type chatState struct {
 	HistoryCur   int             // index into History for up/down browsing (-1 = live input)
 	HistoryBuf   string          // stashed live input while browsing history
 	Visible      bool            // false when the overlay is hidden but session persists
-
-	markdownRenderer
 }
 
 // modelCompleter is the inline autocomplete list for /model.

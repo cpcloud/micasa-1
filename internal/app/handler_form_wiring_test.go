@@ -1270,7 +1270,10 @@ func TestSkipColEditRemapsIndices(t *testing.T) {
 		Total:      "300.00",
 	}
 	require.NoError(t, (newQuoteHandler()).SubmitForm(m))
-	_, meta, _, _ := (newQuoteHandler()).Load(m.store, false)
+	_, meta, _, _ := (newQuoteHandler()).Load(
+		m.store,
+		false,
+	)
 	quoteID := meta[0].ID
 
 	// Project quote handler skips Project column (col 1).

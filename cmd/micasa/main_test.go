@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,12 +32,12 @@ func TestMain(m *testing.M) {
 }
 
 // executeCLI runs the CLI in-process with the given args and returns
-// captured stdout, stderr, and any error.
-func executeCLI(args ...string) (string, string, error) {
+// captured stdout and any error.
+func executeCLI(args ...string) (string, error) {
 	root := newRootCmd()
-	var stdout, stderr bytes.Buffer
+	var stdout bytes.Buffer
 	root.SetOut(&stdout)
-	root.SetErr(&stderr)
+	root.SetErr(io.Discard)
 	root.SetArgs(args)
 	err := fang.Execute(
 		context.Background(),
@@ -44,7 +45,7 @@ func executeCLI(args ...string) (string, string, error) {
 		fang.WithVersion(versionString()),
 		fang.WithColorSchemeFunc(wongColorScheme),
 	)
-	return stdout.String(), stderr.String(), err
+	return stdout.String(), err
 }
 
 // testBin is a lazily-built binary for the few tests that need subprocess
@@ -52,7 +53,7 @@ func executeCLI(args ...string) (string, string, error) {
 var (
 	testBin     string
 	testBinOnce sync.Once
-	testBinErr  error
+	errTestBin  error
 )
 
 func getTestBin(t *testing.T) string {
@@ -62,9 +63,12 @@ func getTestBin(t *testing.T) string {
 		if runtime.GOOS == "windows" {
 			ext = ".exe"
 		}
-		dir, err := os.MkdirTemp("", "micasa-test-*")
+		dir, err := os.MkdirTemp(
+			"",
+			"micasa-test-*",
+		)
 		if err != nil {
-			testBinErr = fmt.Errorf("create temp dir: %w", err)
+			errTestBin = fmt.Errorf("create temp dir: %w", err)
 			return
 		}
 		bin := filepath.Join(dir, "micasa"+ext)
@@ -74,12 +78,12 @@ func getTestBin(t *testing.T) string {
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			testBinErr = fmt.Errorf("build: %w\n%s", err, out)
+			errTestBin = fmt.Errorf("build: %w\n%s", err, out)
 			return
 		}
 		testBin = bin
 	})
-	require.NoError(t, testBinErr, "building test binary")
+	require.NoError(t, errTestBin, "building test binary")
 	return testBin
 }
 
@@ -171,7 +175,7 @@ func TestConfigCmd(t *testing.T) {
 
 	t.Run("GetScalar", func(t *testing.T) {
 		t.Parallel()
-		out, _, err := executeCLI("config", "get", ".chat.llm.model")
+		out, err := executeCLI("config", "get", ".chat.llm.model")
 		require.NoError(t, err)
 		got := strings.TrimSpace(out)
 		assert.NotEmpty(t, got)
@@ -180,7 +184,7 @@ func TestConfigCmd(t *testing.T) {
 
 	t.Run("GetSection", func(t *testing.T) {
 		t.Parallel()
-		out, _, err := executeCLI("config", "get", ".chat.llm")
+		out, err := executeCLI("config", "get", ".chat.llm")
 		require.NoError(t, err)
 		assert.Contains(t, out, "model =")
 		assert.Contains(t, out, "provider =")
@@ -189,21 +193,21 @@ func TestConfigCmd(t *testing.T) {
 
 	t.Run("GetNull", func(t *testing.T) {
 		t.Parallel()
-		out, _, err := executeCLI("config", "get", ".bogus")
+		out, err := executeCLI("config", "get", ".bogus")
 		require.NoError(t, err)
 		assert.Equal(t, "null\n", out)
 	})
 
 	t.Run("GetKeys", func(t *testing.T) {
 		t.Parallel()
-		out, _, err := executeCLI("config", "get", ".chat.llm | keys")
+		out, err := executeCLI("config", "get", ".chat.llm | keys")
 		require.NoError(t, err)
 		assert.Contains(t, out, `"model"`)
 	})
 
 	t.Run("GetDefaultShowConfig", func(t *testing.T) {
 		t.Parallel()
-		out, _, err := executeCLI("config", "get")
+		out, err := executeCLI("config", "get")
 		require.NoError(t, err)
 		assert.Contains(t, out, "[chat.llm]")
 		assert.Contains(t, out, "model =")
@@ -211,7 +215,7 @@ func TestConfigCmd(t *testing.T) {
 
 	t.Run("GetDefaultViaConfig", func(t *testing.T) {
 		t.Parallel()
-		out, _, err := executeCLI("config")
+		out, err := executeCLI("config")
 		require.NoError(t, err)
 		assert.Contains(t, out, "[chat.llm]")
 		assert.Contains(t, out, "model =")
@@ -251,7 +255,7 @@ func TestCompletionCmd(t *testing.T) {
 	for _, shell := range []string{"bash", "zsh", "fish"} {
 		t.Run(shell, func(t *testing.T) {
 			t.Parallel()
-			out, _, err := executeCLI("completion", shell)
+			out, err := executeCLI("completion", shell)
 			require.NoError(t, err)
 			assert.NotEmpty(t, out)
 			assert.Contains(t, out, "micasa", "completion script should reference the app name")
@@ -279,7 +283,7 @@ func TestBackupCmd(t *testing.T) {
 		t.Parallel()
 		src := createTestDB(t)
 		dest := filepath.Join(t.TempDir(), "backup.db")
-		out, _, err := executeCLI("backup", "--source", src, dest)
+		out, err := executeCLI("backup", "--source", src, dest)
 		require.NoError(t, err)
 
 		got := strings.TrimSpace(out)
@@ -292,7 +296,7 @@ func TestBackupCmd(t *testing.T) {
 	t.Run("DefaultDest", func(t *testing.T) {
 		t.Parallel()
 		src := createTestDB(t)
-		out, _, err := executeCLI("backup", "--source", src)
+		out, err := executeCLI("backup", "--source", src)
 		require.NoError(t, err)
 
 		wantPath, absErr := filepath.Abs(src + ".backup")
@@ -319,7 +323,7 @@ func TestBackupCmd(t *testing.T) {
 		t.Parallel()
 		src := createTestDB(t)
 		dest := filepath.Join(t.TempDir(), "valid-backup.db")
-		_, _, err := executeCLI("backup", "--source", src, dest)
+		_, err := executeCLI("backup", "--source", src, dest)
 		require.NoError(t, err)
 
 		backup, openErr := data.Open(dest)
@@ -330,7 +334,7 @@ func TestBackupCmd(t *testing.T) {
 	t.Run("MemorySourceRejected", func(t *testing.T) {
 		t.Parallel()
 		dest := filepath.Join(t.TempDir(), "backup.db")
-		_, _, err := executeCLI("backup", "--source", ":memory:", dest)
+		_, err := executeCLI("backup", "--source", ":memory:", dest)
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "in-memory")
 	})
@@ -341,7 +345,7 @@ func TestBackupCmd(t *testing.T) {
 		dest := filepath.Join(t.TempDir(), "existing.db")
 		require.NoError(t, os.WriteFile(dest, []byte("x"), 0o600))
 
-		_, _, err := executeCLI("backup", "--source", src, dest)
+		_, err := executeCLI("backup", "--source", src, dest)
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "already exists")
 	})
@@ -349,7 +353,7 @@ func TestBackupCmd(t *testing.T) {
 	t.Run("SourceNotFound", func(t *testing.T) {
 		t.Parallel()
 		dest := filepath.Join(t.TempDir(), "backup.db")
-		_, _, err := executeCLI("backup", "--source", "/nonexistent/path.db", dest)
+		_, err := executeCLI("backup", "--source", "/nonexistent/path.db", dest)
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "not found")
 	})
@@ -357,7 +361,7 @@ func TestBackupCmd(t *testing.T) {
 	t.Run("InvalidDestPath", func(t *testing.T) {
 		t.Parallel()
 		src := createTestDB(t)
-		_, _, err := executeCLI("backup", "--source", src, "file:///tmp/backup.db?mode=rwc")
+		_, err := executeCLI("backup", "--source", src, "file:///tmp/backup.db?mode=rwc")
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "invalid destination")
 	})
@@ -371,7 +375,7 @@ func TestBackupCmd(t *testing.T) {
 		require.NoError(t, otherStore.Close())
 
 		dest := filepath.Join(t.TempDir(), "backup.db")
-		_, _, err = executeCLI("backup", "--source", src, dest)
+		_, err = executeCLI("backup", "--source", src, dest)
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "not a micasa database")
 	})

@@ -4,45 +4,43 @@
 version: "2"
 
 linters:
-  enable:
-    # Type safety
-    - forcetypeassert
-    - unconvert
-    - asasalint
+  default: all
+  disable:
+    # Style/formatting -- conflicts with project conventions or tooling
+    - nlreturn         # forces blank lines before returns; noisy
+    - wsl              # whitespace style; too opinionated
+    - varnamelen       # short var names are idiomatic Go
+    - ireturn          # forbids returning interfaces; conflicts with stdlib patterns
+    - lll              # line length; golines handles this
+    - tagliatelle      # enforces JSON tag casing; we set tags explicitly
+    - exhaustruct      # requires all struct fields; too noisy for large structs
+    - nonamedreturns   # forbids named returns; sometimes useful for docs
+    - tagalign         # aligns struct tags; cosmetic
+    - noinlineerr     # forbids inline err assignments; standard Go idiom
+    - dupl            # duplicate code detection; tests excluded, remaining are HTTP boilerplate
 
-    # Error handling
-    - errorlint
-    - errchkjson
+    # Complexity metrics -- we trust reviewer judgment
+    - funlen           # function length limits
+    - cyclop           # cyclomatic complexity
+    - gocognit         # cognitive complexity
+    - maintidx         # maintainability index
+    - gocyclo          # cyclomatic complexity (redundant with cyclop)
+    - nestif           # deeply nested ifs; overlaps complexity linters
 
-    # Bug prevention
-    - govet
-    - gocritic
-    - gosec
-    - durationcheck
-    - exhaustive
-    - fatcontext
-    - copyloopvar
-
-    # Resource & network safety
-    - sqlclosecheck
-    - bodyclose
-    - nilerr
-    - rowserrcheck
-    - noctx
-
-    # Dead code
-    - unused
-    - wastedassign
-
-    # Code quality
-    - goconst
-    - dupword
-    - asciicheck
-    - revive
-    - testifylint
-    - intrange
-    - wrapcheck
-    - musttag
+    # Opinionated rules that don't fit this project
+    - depguard         # dependency allowlist; not needed
+    - mnd              # magic numbers; too aggressive
+    - gochecknoglobals # flags all globals; we use them intentionally
+    - testpackage      # requires _test package suffix; we test internals
+    - paralleltest     # requires t.Parallel(); not always appropriate
+    - tparallel        # similar to paralleltest
+    - gosmopolitan     # i18n checks; not applicable
+    - prealloc         # premature optimization; not useful
+    - err113           # forbids dynamic errors; too aggressive for user-facing messages
+    - forbidigo        # forbids fmt.Print*; CLI programs need them
+    - funcorder        # forces exported-before-unexported ordering; too noisy
+    - containedctx     # flags context in structs; TUI models legitimately store context
+    - wsl_v5           # whitespace style v5; too opinionated
 
   settings:
     exhaustive:
@@ -71,6 +69,9 @@ linters:
       disable:
         - suite-broken-parallel # Our suites capture t := s.T() before Parallel()
 
+    interfacebloat:
+      max: 25  # relay Store has 24 methods; default 10 is too low
+
     gocritic:
       enable-all: true
       disabled-tags:
@@ -94,6 +95,36 @@ linters:
         path: _test\.go
         text: "G204|G704"
 
-      # goconst: repeated strings in tests are fine
+      # goconst: repeated test fixture strings
       - linters: [goconst]
-        path: _test\.go
+        path: internal/relay/(handler_suite|pgstore|stripe)_test\.go
+
+      # unqueryvet: SELECT * in test SQL fixtures is intentional
+      - linters: [unqueryvet]
+        path: internal/(data/query|data/sqlite/sqlite|llm/prompt|sqlfmt/sqlfmt)_test\.go
+
+      # unqueryvet: dumpTable intentionally selects all columns for migration testing
+      - linters: [unqueryvet]
+        path: internal/data/query\.go
+        text: "SELECT \\*"
+
+      # contextcheck: Open is a constructor; threading context to it adds no value
+      - linters: [contextcheck]
+        path: internal/data/backup\.go
+        text: "Open"
+
+      # usetesting: os.MkdirTemp shared via sync.Once; t.TempDir would clean up after first test
+      - linters: [usetesting]
+        path: cmd/micasa/main_test\.go
+
+      # dogsled: visibleProjection returns 5 values, Load returns 4 — callers use subsets
+      - linters: [dogsled]
+        path: internal/app/(bench|view|handler_crud|handler_form_wiring)_test\.go
+      - linters: [dogsled]
+        path: internal/app/model\.go
+        source: "viewportRange"
+
+      # modernize/newexpr: ptr[T] helper wraps non-zero values; new() only creates zero values
+      - linters: [modernize]
+        path: internal/app/view_test\.go
+        text: "newexpr"

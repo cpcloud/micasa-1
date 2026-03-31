@@ -75,7 +75,7 @@ func (ps *PullScanner) Next() (*PullChunk, error) {
 	if err := ps.scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scanning pull response: %w", err)
 	}
-	return nil, nil // EOF
+	return nil, nil //nolint:nilnil // EOF signals end of stream, not an error
 }
 
 // PullModel initiates a model pull via the Ollama native API at baseURL.
@@ -98,7 +98,7 @@ func PullModel(ctx context.Context, baseURL, model string) (*PullScanner, error)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := pullClient.Do(req) //nolint:gosec // baseURL from user config
+	resp, err := pullClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"cannot reach %s -- start it with `ollama serve`", baseURL,

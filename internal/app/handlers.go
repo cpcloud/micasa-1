@@ -4,7 +4,7 @@
 package app
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 	"time"
 
@@ -347,7 +347,8 @@ func (incidentHandler) SyncFixedValues(_ *Model, specs []columnSpec) {
 // ---------------------------------------------------------------------------
 
 type scopedHandler struct {
-	TabHandler   // embedded; delegates FormKind, Delete, Restore, StartEditForm, SyncFixedValues
+	TabHandler // embedded; delegates FormKind, Delete, Restore, StartEditForm, SyncFixedValues
+
 	loadFn       func(*data.Store, bool) ([]table.Row, []rowMeta, [][]cell, error)
 	inlineEditFn func(*Model, string, int) error // nil = TabHandler.InlineEdit
 	startAddFn   func(*Model) error              // nil = TabHandler.StartAddForm
@@ -424,6 +425,7 @@ func newApplianceMaintenanceHandler(applianceID string) scopedHandler {
 
 type serviceLogHandler struct {
 	baseHandler
+
 	maintenanceItemID string
 }
 
@@ -550,7 +552,7 @@ func newVendorJobsHandler(vendorID string) scopedHandler {
 			return nil
 		},
 		startAddFn: func(_ *Model) error {
-			return fmt.Errorf("add service log entries from the Maintenance tab")
+			return errors.New("add service log entries from the Maintenance tab")
 		},
 	}
 }

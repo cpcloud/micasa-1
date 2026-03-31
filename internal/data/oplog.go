@@ -53,7 +53,7 @@ func syncableTable(table string) bool {
 // device ID cell in its context. This indicates a programming error:
 // the operation was performed on a raw *gorm.DB instead of one obtained
 // through a Store.
-var errNoDeviceIDCell = fmt.Errorf("device ID cell not in context")
+var errNoDeviceIDCell = errors.New("device ID cell not in context")
 
 // ErrNoSyncDevice is returned when no sync device record exists.
 var ErrNoSyncDevice = errors.New("no sync device")
@@ -101,7 +101,7 @@ func writeOplogEntry(tx *gorm.DB, tableName, rowID, opType string, payload any) 
 }
 
 // writeOplogEntryRaw writes an oplog entry with a pre-serialized JSON string.
-func writeOplogEntryRaw(tx *gorm.DB, tableName, rowID, opType, payload string) error {
+func writeOplogEntryRaw(tx *gorm.DB, tableName, rowID, opType string) error {
 	if !syncableTable(tableName) {
 		return nil
 	}
@@ -117,7 +117,7 @@ func writeOplogEntryRaw(tx *gorm.DB, tableName, rowID, opType, payload string) e
 		TableName: tableName,
 		RowID:     rowID,
 		OpType:    opType,
-		Payload:   payload,
+		Payload:   "{}",
 		DeviceID:  deviceID,
 		CreatedAt: now,
 		AppliedAt: &now,
@@ -335,7 +335,7 @@ func (s *Store) ConflictLosers() ([]SyncOplogEntry, error) {
 // device ID that replaces the auto-generated local one.
 func (s *Store) UpdateOplogDeviceIDs(oldID, newID string) error {
 	if oldID == "" || newID == "" {
-		return fmt.Errorf("update oplog device IDs: both old and new IDs must be non-empty")
+		return errors.New("update oplog device IDs: both old and new IDs must be non-empty")
 	}
 	return s.db.Model(&SyncOplogEntry{}).
 		Where("device_id = ?", oldID).

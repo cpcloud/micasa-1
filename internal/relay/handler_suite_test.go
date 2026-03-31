@@ -23,6 +23,7 @@ import (
 // HandlerSuite tests HTTP edge cases through ServeHTTP.
 type HandlerSuite struct {
 	suite.Suite
+
 	newHandler func(t *testing.T, opts ...HandlerOption) (*Handler, Store)
 }
 
@@ -64,10 +65,10 @@ func (s *HandlerSuite) TestEmptyBodyAllJSONEndpoints() {
 		path   string
 		auth   bool
 	}{
-		{"POST", "/households", false},
-		{"POST", "/sync/push", true},
-		{"POST", "/households/" + hh.HouseholdID + "/join", false},
-		{"POST", "/key-exchange/fake-id/complete", true},
+		{http.MethodPost, "/households", false},
+		{http.MethodPost, "/sync/push", true},
+		{http.MethodPost, "/households/" + hh.HouseholdID + "/join", false},
+		{http.MethodPost, "/key-exchange/fake-id/complete", true},
 	}
 
 	for _, ep := range endpoints {
@@ -89,7 +90,7 @@ func (s *HandlerSuite) TestOversizedJSONBody() {
 
 	// 1 MiB + 1 byte of garbage. io.LimitReader truncates, JSON decode fails -> 400.
 	bigBody := bytes.NewReader(make([]byte, maxRequestBody+1))
-	req := httptest.NewRequest("POST", "/households", bigBody)
+	req := httptest.NewRequest(http.MethodPost, "/households", bigBody)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
@@ -104,7 +105,7 @@ func (s *HandlerSuite) TestOversizedBlobBody() {
 
 	hash := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 	bigBody := bytes.NewReader(make([]byte, maxBlobSize+1))
-	req := httptest.NewRequest("PUT", "/blobs/"+hh.HouseholdID+"/"+hash, bigBody)
+	req := httptest.NewRequest(http.MethodPut, "/blobs/"+hh.HouseholdID+"/"+hash, bigBody)
 	req.Header.Set("Authorization", "Bearer "+hh.DeviceToken)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -120,7 +121,7 @@ func (s *HandlerSuite) TestPullAfterNonNumeric() {
 	hh := suiteCreateHousehold(t, store)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/sync/pull?after=abc", nil, hh.DeviceToken))
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/sync/pull?after=abc", nil, hh.DeviceToken))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -131,7 +132,7 @@ func (s *HandlerSuite) TestPullLimitNonNumeric() {
 	hh := suiteCreateHousehold(t, store)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/sync/pull?limit=abc", nil, hh.DeviceToken))
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/sync/pull?limit=abc", nil, hh.DeviceToken))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -142,7 +143,7 @@ func (s *HandlerSuite) TestPullLimitZero() {
 	hh := suiteCreateHousehold(t, store)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/sync/pull?limit=0", nil, hh.DeviceToken))
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/sync/pull?limit=0", nil, hh.DeviceToken))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -153,7 +154,7 @@ func (s *HandlerSuite) TestPullLimit1001() {
 	hh := suiteCreateHousehold(t, store)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/sync/pull?limit=1001", nil, hh.DeviceToken))
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/sync/pull?limit=1001", nil, hh.DeviceToken))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -164,7 +165,7 @@ func (s *HandlerSuite) TestBearerNoTrailingSpace() {
 	t.Parallel()
 	h, _ := s.newHandler(t)
 
-	req := httptest.NewRequest("GET", "/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	req.Header.Set("Authorization", "Bearer")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -176,7 +177,7 @@ func (s *HandlerSuite) TestBearerTrailingSpaceNoToken() {
 	t.Parallel()
 	h, _ := s.newHandler(t)
 
-	req := httptest.NewRequest("GET", "/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	req.Header.Set("Authorization", "Bearer ")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -190,7 +191,7 @@ func (s *HandlerSuite) TestBearerLowercase() {
 	t.Parallel()
 	h, _ := s.newHandler(t)
 
-	req := httptest.NewRequest("GET", "/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	req.Header.Set("Authorization", "bearer some-token")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -204,7 +205,7 @@ func (s *HandlerSuite) TestBearerDoubleSpace() {
 	hh := suiteCreateHousehold(t, store)
 
 	// "Bearer  <token>" — double space. extractBearerToken returns " <token>".
-	req := httptest.NewRequest("GET", "/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	req.Header.Set("Authorization", "Bearer  "+hh.DeviceToken)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -216,7 +217,7 @@ func (s *HandlerSuite) TestNoAuthHeader() {
 	t.Parallel()
 	h, _ := s.newHandler(t)
 
-	req := httptest.NewRequest("GET", "/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
@@ -228,7 +229,7 @@ func (s *HandlerSuite) TestLongBearerToken() {
 	h, _ := s.newHandler(t)
 
 	longToken := strings.Repeat("a", 10240)
-	req := httptest.NewRequest("GET", "/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	req.Header.Set("Authorization", "Bearer "+longToken)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -245,7 +246,7 @@ func (s *HandlerSuite) TestPutBlobUppercaseHash() {
 	suiteActivateSubscription(t, store, hh.HouseholdID)
 
 	hash := "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
-	req := httptest.NewRequest("PUT", "/blobs/"+hh.HouseholdID+"/"+hash,
+	req := httptest.NewRequest(http.MethodPut, "/blobs/"+hh.HouseholdID+"/"+hash,
 		bytes.NewReader([]byte("data")))
 	req.Header.Set("Authorization", "Bearer "+hh.DeviceToken)
 	rec := httptest.NewRecorder()
@@ -261,7 +262,7 @@ func (s *HandlerSuite) TestPutBlobShortHash() {
 	suiteActivateSubscription(t, store, hh.HouseholdID)
 
 	hash := strings.Repeat("a", 63) // 63 chars, needs 64
-	req := httptest.NewRequest("PUT", "/blobs/"+hh.HouseholdID+"/"+hash,
+	req := httptest.NewRequest(http.MethodPut, "/blobs/"+hh.HouseholdID+"/"+hash,
 		bytes.NewReader([]byte("data")))
 	req.Header.Set("Authorization", "Bearer "+hh.DeviceToken)
 	rec := httptest.NewRecorder()
@@ -279,7 +280,7 @@ func (s *HandlerSuite) TestHeadBlobExists() {
 	hash := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 	require.NoError(t, store.PutBlob(t.Context(), hh.HouseholdID, hash, []byte("data"), 0))
 
-	req := httptest.NewRequest("HEAD", "/blobs/"+hh.HouseholdID+"/"+hash, nil)
+	req := httptest.NewRequest(http.MethodHead, "/blobs/"+hh.HouseholdID+"/"+hash, nil)
 	req.Header.Set("Authorization", "Bearer "+hh.DeviceToken)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -295,7 +296,7 @@ func (s *HandlerSuite) TestHeadBlobNotFound() {
 	suiteActivateSubscription(t, store, hh.HouseholdID)
 
 	hash := "0000000000000000000000000000000000000000000000000000000000000000"
-	req := httptest.NewRequest("HEAD", "/blobs/"+hh.HouseholdID+"/"+hash, nil)
+	req := httptest.NewRequest(http.MethodHead, "/blobs/"+hh.HouseholdID+"/"+hash, nil)
 	req.Header.Set("Authorization", "Bearer "+hh.DeviceToken)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -312,7 +313,7 @@ func (s *HandlerSuite) TestGetBlobContentType() {
 	hash := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 	require.NoError(t, store.PutBlob(t.Context(), hh.HouseholdID, hash, []byte("data"), 0))
 
-	req := httptest.NewRequest("GET", "/blobs/"+hh.HouseholdID+"/"+hash, nil)
+	req := httptest.NewRequest(http.MethodGet, "/blobs/"+hh.HouseholdID+"/"+hash, nil)
 	req.Header.Set("Authorization", "Bearer "+hh.DeviceToken)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -336,18 +337,18 @@ func (s *HandlerSuite) TestSubscriptionGatingCanceled() {
 		method string
 		path   string
 	}{
-		{"POST", "/sync/push"},
-		{"GET", "/sync/pull"},
+		{http.MethodPost, "/sync/push"},
+		{http.MethodGet, "/sync/pull"},
 		{
-			"PUT",
+			http.MethodPut,
 			"/blobs/" + hh.HouseholdID + "/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
 		},
 		{
-			"GET",
+			http.MethodGet,
 			"/blobs/" + hh.HouseholdID + "/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
 		},
 		{
-			"HEAD",
+			http.MethodHead,
 			"/blobs/" + hh.HouseholdID + "/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
 		},
 	}
@@ -372,7 +373,7 @@ func (s *HandlerSuite) TestSubscriptionGatingReactivation() {
 	)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/sync/pull", nil, hh.DeviceToken))
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/sync/pull", nil, hh.DeviceToken))
 	require.Equal(t, http.StatusPaymentRequired, rec.Code)
 
 	require.NoError(
@@ -381,7 +382,7 @@ func (s *HandlerSuite) TestSubscriptionGatingReactivation() {
 	)
 
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/sync/pull", nil, hh.DeviceToken))
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/sync/pull", nil, hh.DeviceToken))
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
@@ -396,7 +397,7 @@ func (s *HandlerSuite) TestSelfHostedBypassesGating() {
 	)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/sync/pull", nil, hh.DeviceToken))
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/sync/pull", nil, hh.DeviceToken))
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
@@ -407,7 +408,7 @@ func (s *HandlerSuite) TestNullSubscriptionAllowed() {
 	hh := suiteCreateHousehold(t, store)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/sync/pull", nil, hh.DeviceToken))
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/sync/pull", nil, hh.DeviceToken))
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
@@ -424,9 +425,9 @@ func (s *HandlerSuite) TestCrossHouseholdBlobAccess() {
 
 	hash := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 
-	for _, method := range []string{"PUT", "GET", "HEAD"} {
+	for _, method := range []string{http.MethodPut, http.MethodGet, http.MethodHead} {
 		var body *bytes.Reader
-		if method == "PUT" {
+		if method == http.MethodPut {
 			body = bytes.NewReader([]byte("data"))
 		} else {
 			body = bytes.NewReader(nil)
@@ -448,7 +449,7 @@ func (s *HandlerSuite) TestCrossHouseholdInvite() {
 	hh2 := suiteCreateHousehold(t, store)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("POST", "/households/"+hh2.HouseholdID+"/invite",
+	h.ServeHTTP(rec, authRequest(http.MethodPost, "/households/"+hh2.HouseholdID+"/invite",
 		nil, hh1.DeviceToken))
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }
@@ -461,12 +462,12 @@ func (s *HandlerSuite) TestCrossHouseholdDevices() {
 	hh2 := suiteCreateHousehold(t, store)
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("GET", "/households/"+hh2.HouseholdID+"/devices",
+	h.ServeHTTP(rec, authRequest(http.MethodGet, "/households/"+hh2.HouseholdID+"/devices",
 		nil, hh1.DeviceToken))
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, authRequest("DELETE",
+	h.ServeHTTP(rec, authRequest(http.MethodDelete,
 		"/households/"+hh2.HouseholdID+"/devices/"+hh2.DeviceID,
 		nil, hh1.DeviceToken))
 	assert.Equal(t, http.StatusForbidden, rec.Code)
@@ -498,7 +499,7 @@ func (s *HandlerSuite) TestWebhookReplay() {
 	sig := makeSignatureHeader(payload, secret, time.Now())
 
 	for range 2 {
-		req := httptest.NewRequest("POST", "/webhooks/stripe", bytes.NewReader(payload))
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", bytes.NewReader(payload))
 		req.Header.Set("Stripe-Signature", sig)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -515,7 +516,7 @@ func (s *HandlerSuite) TestWebhookNonSubscriptionEvent() {
 	payload := []byte(`{"id":"evt_1","type":"charge.succeeded","data":{}}`)
 	sig := makeSignatureHeader(payload, secret, time.Now())
 
-	req := httptest.NewRequest("POST", "/webhooks/stripe", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", bytes.NewReader(payload))
 	req.Header.Set("Stripe-Signature", sig)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -528,7 +529,7 @@ func (s *HandlerSuite) TestWebhookMissingSignatureHeader() {
 	t.Parallel()
 	h, _ := s.newHandler(t, WithWebhookSecret("whsec_test"))
 
-	req := httptest.NewRequest("POST", "/webhooks/stripe",
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe",
 		bytes.NewReader([]byte(`{"id":"evt_1"}`)))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -545,7 +546,7 @@ func (s *HandlerSuite) TestWebhookExactly1MiB() {
 	copy(payload, `{"id":"evt_1","type":"charge.succeeded","data":{}}`)
 	sig := makeSignatureHeader(payload, secret, time.Now())
 
-	req := httptest.NewRequest("POST", "/webhooks/stripe", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", bytes.NewReader(payload))
 	req.Header.Set("Stripe-Signature", sig)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -560,7 +561,7 @@ func (s *HandlerSuite) TestWebhook1MiBPlus1() {
 	h, _ := s.newHandler(t, WithWebhookSecret("whsec_test"))
 
 	payload := make([]byte, maxRequestBody+1)
-	req := httptest.NewRequest("POST", "/webhooks/stripe", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", bytes.NewReader(payload))
 	req.Header.Set("Stripe-Signature", "t=123,v1=fake")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

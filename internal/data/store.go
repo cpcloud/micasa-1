@@ -149,7 +149,7 @@ func (s *Store) MaxDocumentSize() uint64 {
 // imports. The value must be positive; zero is rejected.
 func (s *Store) SetMaxDocumentSize(n uint64) error {
 	if n == 0 {
-		return fmt.Errorf("max document size must be positive, got 0")
+		return errors.New("max document size must be positive, got 0")
 	}
 	s.maxDocumentSize = n
 	return nil
@@ -224,7 +224,7 @@ func ExpandHome(path string) string {
 // are accepted.
 func ValidateDBPath(path string) error {
 	if path == "" {
-		return fmt.Errorf("database path must not be empty")
+		return errors.New("database path must not be empty")
 	}
 	if path == ":memory:" {
 		return nil
@@ -458,7 +458,7 @@ func softDeleteWith(tx *gorm.DB, model any, entity string, id string) error {
 
 	// Write oplog "delete" entry for the soft-deleted entity.
 	if table := deletionEntityToTable[entity]; table != "" && !isSyncApplying(tx) {
-		if err := writeOplogEntryRaw(tx, table, id, OpDelete, "{}"); err != nil {
+		if err := writeOplogEntryRaw(tx, table, id, OpDelete); err != nil {
 			return err
 		}
 	}
@@ -491,7 +491,7 @@ func restoreSoftDeleted(tx *gorm.DB, model any, entity string, id string) error 
 	// Write oplog "restore" entry. GORM's Unscoped().Update() does not
 	// trigger model-level AfterUpdate hooks, so we must do this explicitly.
 	if table := deletionEntityToTable[entity]; table != "" && !isSyncApplying(tx) {
-		if err := writeOplogEntryRaw(tx, table, id, OpRestore, "{}"); err != nil {
+		if err := writeOplogEntryRaw(tx, table, id, OpRestore); err != nil {
 			return err
 		}
 	}
@@ -568,10 +568,10 @@ func (s *Store) countByFK(model any, fkColumn string, ids []string) (map[string]
 // deleted_at. Works with both Store.db and transaction handles.
 // Writes an "update" oplog entry with the new values as payload.
 func updateByIDWith(db *gorm.DB, table string, model any, id string, values any) error {
-	if err := db.Model(model).Where(ColID+" = ?", id).
-		Select("*").
-		Omit(ColID, ColCreatedAt, ColDeletedAt).
-		Updates(values).Error; err != nil {
+	if err := db.Model(model).Where(ColID+" = ?", id). //nolint:unqueryvet // GORM Select("*") updates all non-omitted columns
+								Select("*").
+								Omit(ColID, ColCreatedAt, ColDeletedAt).
+								Updates(values).Error; err != nil {
 		return err
 	}
 	if !isSyncApplying(db) {

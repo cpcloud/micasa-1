@@ -5,7 +5,7 @@ package extract
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +41,7 @@ func TestOcrPDF_ValidPDF(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -61,7 +61,7 @@ func TestOcrPDF_ScannedPDF(t *testing.T) {
 
 	data, err := os.ReadFile(
 		filepath.Join("testdata", "scanned-invoice.pdf"),
-	) //nolint:gosec // test fixture
+	)
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/scanned-invoice.pdf")
 	}
@@ -88,7 +88,7 @@ func TestOcrPDF_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -108,7 +108,7 @@ func TestOcrPDF_MixedPDF_MultiPageTSV(t *testing.T) {
 
 	data, err := os.ReadFile(
 		filepath.Join("testdata", "mixed-inspection.pdf"),
-	) //nolint:gosec // test fixture
+	)
 	if err != nil {
 		t.Skipf("test fixture not found (pdfunite unavailable?): testdata/mixed-inspection.pdf")
 	}
@@ -125,7 +125,7 @@ func TestOcrPDF_SinglePage(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -145,9 +145,7 @@ func TestOcrImage_ValidImage(t *testing.T) {
 		skipOrFatalCI(t, "tesseract not available")
 	}
 
-	data, err := os.ReadFile(
-		filepath.Join("testdata", "sample-text.png"),
-	) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample-text.png"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample-text.png")
 	}
@@ -164,9 +162,7 @@ func TestOcrImage_InvoicePNG(t *testing.T) {
 		skipOrFatalCI(t, "tesseract not available")
 	}
 
-	data, err := os.ReadFile(
-		filepath.Join("testdata", "invoice.png"),
-	) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "invoice.png"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/invoice.png")
 	}
@@ -194,9 +190,7 @@ func TestOcrImage_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "tesseract not available")
 	}
 
-	data, err := os.ReadFile(
-		filepath.Join("testdata", "sample-text.png"),
-	) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample-text.png"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample-text.png")
 	}
@@ -268,7 +262,7 @@ func TestPdfPageCount_ValidPDF(t *testing.T) {
 		skipOrFatalCI(t, "pdfinfo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -294,7 +288,6 @@ func TestPdfPageCount_InvalidPDF(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	pdfPath := filepath.Join(tmpDir, "corrupt.pdf")
-	//nolint:gosec // path is tmpDir + constant filename
 	require.NoError(
 		t,
 		os.WriteFile(pdfPath, []byte("corrupt data"), 0o600),
@@ -310,7 +303,7 @@ func TestPdfPageCount_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "pdfinfo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -340,7 +333,7 @@ func TestOcrPage_ValidPDF(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -367,7 +360,6 @@ func TestOcrPage_InvalidPDF(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	pdfPath := filepath.Join(tmpDir, "corrupt.pdf")
-	//nolint:gosec // path is tmpDir + constant filename
 	require.NoError(
 		t,
 		os.WriteFile(pdfPath, []byte("corrupt data"), 0o600),
@@ -383,7 +375,7 @@ func TestOcrPage_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -413,7 +405,7 @@ func TestExtractPDF_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "pdftotext not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -446,7 +438,7 @@ func TestOcrPDFWithProgress_ZeroMaxPages(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -472,7 +464,7 @@ func TestOcrPDFWithProgress_NegativeMaxPages(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -530,7 +522,7 @@ func TestOcrPDFWithProgress_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -561,9 +553,7 @@ func TestOcrImageWithProgress_ValidImage(t *testing.T) {
 		skipOrFatalCI(t, "tesseract not available")
 	}
 
-	data, err := os.ReadFile(
-		filepath.Join("testdata", "sample-text.png"),
-	) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample-text.png"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample-text.png")
 	}
@@ -630,9 +620,7 @@ func TestOcrImageWithProgress_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "tesseract not available")
 	}
 
-	data, err := os.ReadFile(
-		filepath.Join("testdata", "sample-text.png"),
-	) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample-text.png"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample-text.png")
 	}
@@ -663,7 +651,7 @@ func TestPDFOCRExtractor_Extract_MaxPagesDefault(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -692,7 +680,7 @@ func TestPDFOCRExtractor_Extract_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -726,9 +714,7 @@ func TestImageOCRExtractor_Extract_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "tesseract not available")
 	}
 
-	data, err := os.ReadFile(
-		filepath.Join("testdata", "invoice.png"),
-	) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "invoice.png"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/invoice.png")
 	}
@@ -751,7 +737,7 @@ func TestPDFTextExtractor_Extract_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "pdftotext not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -781,7 +767,7 @@ func TestPDFTextExtractor_Extract_DefaultTimeout(t *testing.T) {
 		skipOrFatalCI(t, "pdftotext not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -829,7 +815,7 @@ func TestOcrPDFPages_ValidPDF(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -865,7 +851,7 @@ func TestOcrPDFPages_ContextCancelled(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -892,7 +878,7 @@ func TestOcrPDFPages_ProgressReporting(t *testing.T) {
 		skipOrFatalCI(t, "tesseract and/or pdftocairo not available")
 	}
 
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf")) //nolint:gosec // test fixture
+	data, err := os.ReadFile(filepath.Join("testdata", "sample.pdf"))
 	if err != nil {
 		skipOrFatalCI(t, "test fixture not found: testdata/sample.pdf")
 	}
@@ -927,7 +913,7 @@ func TestCollectOCRResults_MixedErrorsAndSuccess(t *testing.T) {
 
 	results := []ocrPageResult{
 		{text: "page one", tsv: []byte("h1\th2\ndata1\n")},
-		{err: fmt.Errorf("page 2 failed")},
+		{err: errors.New("page 2 failed")},
 		{text: "page three", tsv: []byte("h1\th2\ndata3\n")},
 	}
 
@@ -942,8 +928,8 @@ func TestCollectOCRResults_AllErrors(t *testing.T) {
 	t.Parallel()
 
 	results := []ocrPageResult{
-		{err: fmt.Errorf("fail 1")},
-		{err: fmt.Errorf("fail 2")},
+		{err: errors.New("fail 1")},
+		{err: errors.New("fail 2")},
 	}
 
 	text, tsv := collectOCRResults(results)

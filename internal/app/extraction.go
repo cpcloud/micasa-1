@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -59,6 +60,8 @@ type extractionStepInfo struct {
 
 // extractionLogState holds the state of the extraction progress overlay.
 type extractionLogState struct {
+	markdownRenderer
+
 	ID          uint64
 	DocID       string
 	Filename    string
@@ -96,8 +99,6 @@ type extractionLogState struct {
 	// Channel references for the waitFor loop pattern.
 	extractCh <-chan extract.ExtractProgress
 	llmCh     <-chan llm.StreamChunk
-
-	markdownRenderer
 
 	// Which steps are active (skipped steps are simply not shown).
 	hasText    bool
@@ -394,12 +395,7 @@ func (m *Model) findExtraction(id uint64) *extractionLogState {
 
 // isBgExtraction returns true when the given extraction is in bgExtractions.
 func (m *Model) isBgExtraction(ex *extractionLogState) bool {
-	for _, bg := range m.ex.bgExtractions {
-		if bg == ex {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(m.ex.bgExtractions, ex)
 }
 
 // cancelExtraction cancels any in-flight extraction and clears state.
@@ -618,7 +614,7 @@ func (m *Model) handleExtractionProgress(msg extractionProgressMsg) tea.Cmd {
 		}
 		ex.Done = true
 		if m.isBgExtraction(ex) {
-			m.setStatusError(fmt.Sprintf("Extraction failed: %s", ex.Filename))
+			m.setStatusError("Extraction failed: " + ex.Filename)
 		}
 		return nil
 	}
@@ -678,7 +674,7 @@ func (m *Model) handleExtractionProgress(msg extractionProgressMsg) tea.Cmd {
 
 	ex.Done = true
 	if m.isBgExtraction(ex) {
-		m.setStatusInfo(fmt.Sprintf("Extracted: %s", ex.Filename))
+		m.setStatusInfo("Extracted: " + ex.Filename)
 	}
 	return nil
 }
@@ -705,10 +701,10 @@ func (m *Model) maybeStartLLMStep(ex *extractionLogState) tea.Cmd {
 }
 
 // handleExtractionLLMPing processes the background LLM ping result.
-func (m *Model) handleExtractionLLMPing(msg extractionLLMPingMsg) tea.Cmd {
+func (m *Model) handleExtractionLLMPing(msg extractionLLMPingMsg) {
 	ex := m.findExtraction(msg.ID)
 	if ex == nil {
-		return nil
+		return
 	}
 	ex.llmPingDone = true
 	ex.llmPingErr = msg.Err
@@ -729,7 +725,6 @@ func (m *Model) handleExtractionLLMPing(msg extractionLLMPingMsg) tea.Cmd {
 			}
 		}
 	}
-	return nil
 }
 
 // handleExtractionLLMStarted stores the LLM stream channel and starts reading.
@@ -767,7 +762,7 @@ func (m *Model) handleExtractionLLMChunk(msg extractionLLMChunkMsg) tea.Cmd {
 		ex.Done = true
 		ex.advanceCursor()
 		if m.isBgExtraction(ex) {
-			m.setStatusError(fmt.Sprintf("Extraction failed: %s", ex.Filename))
+			m.setStatusError("Extraction failed: " + ex.Filename)
 		}
 		return nil
 	}
@@ -811,9 +806,9 @@ func (m *Model) handleExtractionLLMChunk(msg extractionLLMChunkMsg) tea.Cmd {
 		ex.advanceCursor()
 		if m.isBgExtraction(ex) {
 			if ex.HasError {
-				m.setStatusError(fmt.Sprintf("Extraction failed: %s", ex.Filename))
+				m.setStatusError("Extraction failed: " + ex.Filename)
 			} else {
-				m.setStatusInfo(fmt.Sprintf("Extracted: %s", ex.Filename))
+				m.setStatusInfo("Extracted: " + ex.Filename)
 			}
 		}
 		return nil
@@ -952,7 +947,7 @@ func (m *Model) commitShadowOperations(ex *extractionLogState, ops []extract.Ope
 		return nil
 	}
 	if ex.shadowDB == nil {
-		return fmt.Errorf("no shadow DB: operations were not staged")
+		return errors.New("no shadow DB: operations were not staged")
 	}
 	err := ex.shadowDB.Commit(m.store, ops)
 	ex.closeShadowDB()

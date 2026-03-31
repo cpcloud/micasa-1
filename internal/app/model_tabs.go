@@ -261,7 +261,10 @@ func (m *Model) openServiceLogDetail(maintID string, maintName string) error {
 	return m.openDetailFromDef(serviceLogDef, maintID, maintName)
 }
 
-func (m *Model) openApplianceMaintenanceDetail(applianceID string, applianceName string) error {
+func (m *Model) openApplianceMaintenanceDetail(
+	applianceID string, //nolint:unparam // varies at runtime; tests use a fixed ID
+	applianceName string, //nolint:unparam // varies at runtime; tests use a fixed name
+) error {
 	return m.openDetailFromDef(applianceMaintenanceDef, applianceID, applianceName)
 }
 

@@ -95,7 +95,7 @@ type ChatLLM struct {
 
 	// APIKey is the authentication credential. Required for cloud
 	// providers; leave empty for local servers like Ollama.
-	APIKey string `toml:"api_key"` //nolint:gosec // config field, not a hardcoded credential
+	APIKey string `toml:"api_key"`
 
 	// Timeout is the inference timeout for LLM responses (including
 	// streaming). Go duration string, e.g. "5m", "10m". Default: "5m".
@@ -149,7 +149,7 @@ type ExtractionLLM struct {
 	Model string `toml:"model" default:"qwen3"`
 
 	// APIKey is the authentication credential.
-	APIKey string `toml:"api_key"` //nolint:gosec // config field, not a hardcoded credential
+	APIKey string `toml:"api_key"`
 
 	// Timeout is the inference timeout for extraction LLM responses.
 	Timeout string `toml:"timeout" default:"5m" validate:"omitempty,positive_duration"`
@@ -466,13 +466,12 @@ func setFieldFromEnvPtr(fv reflect.Value, envVar, val string) error {
 // dot-delimited config keys.
 func EnvVars() map[string]string {
 	m := make(map[string]string)
-	collectEnvVars(reflect.TypeOf(Config{}), "", m)
+	collectEnvVars(reflect.TypeFor[Config](), "", m)
 	return m
 }
 
 func collectEnvVars(t reflect.Type, prefix string, m map[string]string) {
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		tomlTag := tomlTagName(f)
 		if tomlTag == "" {
 			continue
@@ -497,8 +496,8 @@ func collectEnvVars(t reflect.Type, prefix string, m map[string]string) {
 // Get resolves a dot-delimited config key to its string representation.
 // Keys mirror the TOML structure (e.g. "chat.llm.model",
 // "documents.max_file_size").
-func (c Config) Get(key string) (string, error) {
-	return getField(reflect.ValueOf(c), key)
+func (c *Config) Get(key string) (string, error) {
+	return getField(reflect.ValueOf(*c), key)
 }
 
 // getField walks a struct value using dot-delimited TOML tag names and returns
@@ -553,10 +552,8 @@ func tomlTagName(f reflect.StructField) string {
 	if tag == "" || tag == "-" {
 		return ""
 	}
-	if i := strings.IndexByte(tag, ','); i >= 0 {
-		return tag[:i]
-	}
-	return tag
+	name, _, _ := strings.Cut(tag, ",")
+	return name
 }
 
 // EnvVarName derives the environment variable name from a dot-delimited
@@ -619,15 +616,14 @@ func formatValue(v reflect.Value) (string, error) {
 // Keys returns the sorted list of valid dot-delimited config key names
 // by reflecting on the Config struct's TOML tags.
 func Keys() []string {
-	keys := collectKeys(reflect.TypeOf(Config{}), "")
+	keys := collectKeys(reflect.TypeFor[Config](), "")
 	slices.Sort(keys)
 	return keys
 }
 
 func collectKeys(t reflect.Type, prefix string) []string {
 	var keys []string
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		tag := tomlTagName(f)
 		if tag == "" {
 			continue
@@ -660,7 +656,7 @@ func collectKeys(t reflect.Type, prefix string) []string {
 }
 
 // hasAPIKeys reports whether any API key field is set in the config.
-func (c Config) hasAPIKeys() bool {
+func (c *Config) hasAPIKeys() bool {
 	return c.Chat.LLM.APIKey != "" ||
 		c.Extraction.LLM.APIKey != ""
 }
@@ -706,12 +702,7 @@ var providers = []string{
 func providerNames() []string { return providers }
 
 func validProvider(name string) bool {
-	for _, p := range providers {
-		if p == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(providers, name)
 }
 
 // detectProvider infers the provider from the base URL and API key.

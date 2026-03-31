@@ -111,9 +111,10 @@ type dashRow struct {
 // and contains at least one non-empty label, a dim header row is prepended.
 func renderMiniTable(
 	headers []string, rows []dashRow,
-	colGap, maxWidth, cursor int,
+	maxWidth, cursor int,
 	selected, headerStyle lipgloss.Style,
 ) []string {
+	const colGap = 3
 	if len(rows) == 0 {
 		return nil
 	}
@@ -154,10 +155,7 @@ func renderMiniTable(
 		}
 		if overflow := total - maxWidth; overflow > 0 {
 			minFirst := 6
-			newFirst := widths[0] - overflow
-			if newFirst < minFirst {
-				newFirst = minFirst
-			}
+			newFirst := max(widths[0]-overflow, minFirst)
 			widths[0] = newFirst
 		}
 	}
@@ -181,10 +179,7 @@ func renderMiniTable(
 				label = headers[i]
 			}
 			styled := headerStyle.Render(label)
-			pad := widths[i] - lipgloss.Width(label)
-			if pad < 0 {
-				pad = 0
-			}
+			pad := max(widths[i]-lipgloss.Width(label), 0)
 			parts[i] = styled + strings.Repeat(" ", pad)
 		}
 		lines = append(lines, "  "+strings.Join(parts, gap))
@@ -210,10 +205,7 @@ func renderMiniTable(
 			}
 			styled := c.Style.Render(text)
 			tw := lipgloss.Width(text)
-			pad := widths[i] - tw
-			if pad < 0 {
-				pad = 0
-			}
+			pad := max(widths[i]-tw, 0)
 			if c.Align == alignRight {
 				parts[i] = strings.Repeat(" ", pad) + styled
 			} else {
@@ -519,7 +511,6 @@ func (m *Model) dashboardView(budget, maxWidth int) string {
 
 	// Render sections. Collapsed ones show only a header with count.
 	sel := m.styles.TableSelected()
-	colGap := 3
 	navIdx := 0
 	var lines []string
 	cursorLine := 0
@@ -555,7 +546,7 @@ func (m *Model) dashboardView(budget, maxWidth int) string {
 		// Expanded: render data rows below the header.
 		localCursor := m.dash.cursor - navIdx
 		tbl := renderMiniTable(
-			s.headers, s.rows, colGap, maxWidth, localCursor, sel, m.styles.DashLabel(),
+			s.headers, s.rows, maxWidth, localCursor, sel, m.styles.DashLabel(),
 		)
 		// Column header row (if present) offsets data rows by 1.
 		headerOffset := len(tbl) - len(s.rows)
@@ -582,15 +573,9 @@ func (m *Model) dashboardView(budget, maxWidth int) string {
 	if budget > 0 && len(lines) > budget {
 		indicatorLines := 0
 		for range 3 {
-			viewportH := budget - indicatorLines
-			if viewportH < 1 {
-				viewportH = 1
-			}
+			viewportH := max(budget-indicatorLines, 1)
 			m.scrollDashTo(cursorLine, viewportH, len(lines))
-			end := m.dash.scrollOffset + viewportH
-			if end > len(lines) {
-				end = len(lines)
-			}
+			end := min(m.dash.scrollOffset+viewportH, len(lines))
 			needed := 0
 			if m.dash.scrollOffset > 0 {
 				needed++
@@ -604,15 +589,9 @@ func (m *Model) dashboardView(budget, maxWidth int) string {
 			indicatorLines = needed
 		}
 
-		viewportH := budget - indicatorLines
-		if viewportH < 1 {
-			viewportH = 1
-		}
+		viewportH := max(budget-indicatorLines, 1)
 
-		end := m.dash.scrollOffset + viewportH
-		if end > len(lines) {
-			end = len(lines)
-		}
+		end := min(m.dash.scrollOffset+viewportH, len(lines))
 
 		visible := lines[m.dash.scrollOffset:end]
 		var result []string
@@ -992,10 +971,7 @@ func (m *Model) scrollDashTo(targetLine, viewportH, totalLines int) {
 	} else if targetLine >= m.dash.scrollOffset+viewportH {
 		m.dash.scrollOffset = targetLine - viewportH + 1
 	}
-	maxOffset := totalLines - viewportH
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
+	maxOffset := max(totalLines-viewportH, 0)
 	if m.dash.scrollOffset > maxOffset {
 		m.dash.scrollOffset = maxOffset
 	}

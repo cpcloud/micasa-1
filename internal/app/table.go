@@ -71,7 +71,7 @@ func visibleProjection(tab *Tab) (
 			sorts = append(sorts, sortEntry{Col: vis, Dir: se.Dir})
 		}
 	}
-	return
+	return specs, cellRows, colCursor, sorts, visToFull
 }
 
 func renderHeaderRow(
@@ -493,17 +493,11 @@ func renderWithNoteSuffix(
 	suffix string,
 	suffixW int,
 ) string {
-	textMaxW := width - suffixW - 1
-	if textMaxW < 1 {
-		textMaxW = 1
-	}
+	textMaxW := max(width-suffixW-1, 1)
 	truncated := ansi.Truncate(value, textMaxW, symEllipsis)
 	styled := style.Render(truncated)
 	textW := lipgloss.Width(truncated)
-	gap := width - textW - suffixW
-	if gap < 1 {
-		gap = 1
-	}
+	gap := max(width-textW-suffixW, 1)
 	return styled + strings.Repeat(" ", gap) + appStyles.Empty().Render(suffix)
 }
 
@@ -737,10 +731,8 @@ func dateDiffDays(now, target time.Time) int {
 // firstLine returns the first line of s, trimmed of surrounding whitespace.
 func firstLine(s string) string {
 	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return strings.TrimRight(s[:i], "\r \t")
-	}
-	return s
+	first, _, _ := strings.Cut(s, "\n")
+	return strings.TrimRight(first, "\r \t")
 }
 
 // extraLineCount returns the number of additional lines beyond the first.
@@ -792,17 +784,11 @@ func visibleRange(total, height, cursor int) (int, int) {
 	if cursor >= total {
 		cursor = total - 1
 	}
-	start := cursor - height/2
-	if start < 0 {
-		start = 0
-	}
+	start := max(cursor-height/2, 0)
 	end := start + height
 	if end > total {
 		end = total
-		start = end - height
-		if start < 0 {
-			start = 0
-		}
+		start = max(end-height, 0)
 	}
 	return start, end
 }
@@ -818,10 +804,7 @@ func columnWidths(
 	if columnCount == 0 {
 		return nil
 	}
-	available := width - separatorWidth*(columnCount-1)
-	if available < columnCount {
-		available = columnCount
-	}
+	available := max(width-separatorWidth*(columnCount-1), columnCount)
 
 	natural := precompNatural
 	if natural == nil {
