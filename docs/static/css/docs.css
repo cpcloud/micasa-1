@@ -760,7 +760,7 @@ h2:hover .badge-experimental .badge-label {
 }
 
 .docs-main pre.mermaid .actor-line {
-  stroke: var(--rule) !important;
+  stroke: var(--warm-gray) !important;
 }
 
 .docs-main pre.mermaid .messageLine0,
@@ -779,25 +779,28 @@ h2:hover .badge-experimental .badge-label {
 }
 
 .docs-main pre.mermaid .labelBox {
-  stroke: var(--rule) !important;
-  fill: var(--cream) !important;
+  stroke: none !important;
+  fill: var(--terracotta) !important;
+  rx: 4;
 }
 
 .docs-main pre.mermaid .labelText,
 .docs-main pre.mermaid .labelText > tspan,
 .docs-main pre.mermaid .loopText,
 .docs-main pre.mermaid .loopText > tspan {
-  fill: var(--charcoal-soft) !important;
+  fill: var(--cream) !important;
+  dominant-baseline: central !important;
 }
 
 .docs-main pre.mermaid .loopLine {
-  stroke: var(--rule) !important;
-  fill: var(--rule) !important;
+  stroke: var(--terracotta) !important;
+  stroke-opacity: 0.3 !important;
+  fill: none !important;
 }
 
 .docs-main pre.mermaid .note {
-  stroke: var(--rule) !important;
-  fill: var(--cream) !important;
+  stroke: var(--warm-gray) !important;
+  fill: var(--linen) !important;
 }
 
 .docs-main pre.mermaid .noteText,

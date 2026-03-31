@@ -243,7 +243,8 @@ sequenceDiagram
     R->>R: assign sequence numbers, store ciphertext
     end
 
-    Note over A,B: User runs `micasa pro invite`, shares code
+    Note over A: User runs `micasa pro invite`
+    Note over A,B: share invite code out-of-band
 
     rect rgb(240, 235, 228)
     Note over A,B: Key exchange

@@ -21,6 +21,7 @@
   --toggle-bg-hover: #e8e2da;
   --toggle-hover-speed: 0.15s;
   --cloud: #b8b0a5;
+  --rect-fill: rgba(192, 94, 60, 0.15);
 }
 
 [data-theme="dark"] {
@@ -39,6 +40,7 @@
   --overlay-bg: rgba(0, 0, 0, 0.5);
   --toggle-bg: #342f29;
   --toggle-bg-hover: var(--rule);
+  --rect-fill: rgba(212, 118, 78, 0.10);
 }
 
 /* --- Theme toggle (shared across all pages) --- */
