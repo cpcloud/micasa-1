@@ -254,26 +254,6 @@ document.querySelectorAll(".mermaid svg").forEach(function(svg) {
       rect.style.fill = "var(--rect-fill)";
     }
   });
-  // Debug: log labelBox SVG structure to console for inspection.
-  console.log("DEBUG: svg found, labelBox count:", svg.querySelectorAll(".labelBox").length);
-  svg.querySelectorAll(".labelBox").forEach(function(box, i) {
-    var g = box.closest("g");
-    if (!g) return;
-    var text = g.querySelector(".labelText");
-    if (!text) return;
-    console.log("labelBox[" + i + "]:", {
-      boxY: box.getAttribute("y"),
-      boxH: box.getAttribute("height"),
-      boxW: box.getAttribute("width"),
-      textY: text.getAttribute("y"),
-      textDY: text.getAttribute("dy"),
-      textBBox: text.getBBox(),
-      tspans: Array.from(text.querySelectorAll("tspan")).map(function(ts) {
-        return { y: ts.getAttribute("y"), dy: ts.getAttribute("dy"), text: ts.textContent };
-      }),
-      outerHTML: g.outerHTML.substring(0, 500)
-    });
-  });
 });
 </script>
 
