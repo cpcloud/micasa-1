@@ -19,7 +19,7 @@ env:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       go: ${{ steps.detect.outputs.go }}
       ci: ${{ steps.detect.outputs.ci }}
@@ -65,7 +65,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - ubuntu-24.04-arm
+          - blacksmith-4vcpu-ubuntu-2404-arm
           - macos-latest
           - windows-latest
           - windows-11-arm
@@ -183,7 +183,7 @@ jobs:
     name: Postgres Integration (${{ matrix.variant }})
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       matrix:
         include:
@@ -245,7 +245,7 @@ jobs:
     name: Benchmarks (smoke)
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     concurrency:
       group: ci-benchmarks-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -278,7 +278,7 @@ jobs:
     name: Nix Build
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     concurrency:
       group: ci-nix-build-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -310,7 +310,7 @@ jobs:
     name: Docs Build
     needs: changes
     if: needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     concurrency:
       group: ci-docs-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -343,7 +343,7 @@ jobs:
     name: Semantic Release (dry-run)
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.ci == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -372,7 +372,7 @@ jobs:
     name: Docker Build
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     concurrency:
       group: ci-docker-build-${{ matrix.build_tags }}-${{ github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -412,7 +412,7 @@ jobs:
     name: CI Result
     if: always()
     needs: [changes, test, pgtest, benchmarks, nix-build, docs, semantic-release-dry-run, docker-build]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1

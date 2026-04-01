@@ -17,7 +17,7 @@ jobs:
   check:
     name: Check
     if: github.actor == 'renovate[bot]'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       needed: ${{ steps.check.outputs.needed }}
     steps:
@@ -54,7 +54,7 @@ jobs:
     name: Update Vendor Hash
     needs: check
     if: needs.check.outputs.needed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
     steps:
