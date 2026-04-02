@@ -17,16 +17,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestLLMServer creates an httptest server that returns the given response
-// as an OpenAI-compatible chat completion response.
+// newTestLLMServer creates an httptest server that streams the given response
+// as an OpenAI-compatible SSE stream.
 func newTestLLMServer(t *testing.T, responseContent string) *llm.Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w,
-			`{"choices":[{"message":{"content":%s}}]}`,
-			mustMarshalJSON(t, responseContent),
-		)
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		escaped := mustMarshalJSON(t, responseContent)
+		for _, line := range []string{
+			fmt.Sprintf(
+				`data: {"choices":[{"delta":{"content":%s},"finish_reason":""}]}`,
+				escaped,
+			),
+			`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+		} {
+			_, _ = fmt.Fprintln(w, line)
+			_, _ = fmt.Fprintln(w)
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
 	}))
 	t.Cleanup(srv.Close)
 	client, err := llm.NewClient("llamacpp", srv.URL+"/v1", "test-model", "", 5*time.Second)
@@ -102,10 +114,24 @@ func TestPipeline_LLMServerDown(t *testing.T) {
 func TestPipeline_LLMGarbageResponse(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w,
-			`{"choices":[{"message":{"content":"I don't understand the question"}}]}`,
-		)
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		// Stream garbage non-JSON content that will fail parsing.
+		escaped := mustMarshalJSON(t, "I don't understand the question")
+		for _, line := range []string{
+			fmt.Sprintf(
+				`data: {"choices":[{"delta":{"content":%s},"finish_reason":""}]}`,
+				escaped,
+			),
+			`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+		} {
+			_, _ = fmt.Fprintln(w, line)
+			_, _ = fmt.Fprintln(w)
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
 	}))
 	t.Cleanup(srv.Close)
 	client, err := llm.NewClient("llamacpp", srv.URL+"/v1", "test-model", "", 5*time.Second)

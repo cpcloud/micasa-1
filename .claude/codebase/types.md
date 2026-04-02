@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Phillip Cloud -->
 <!-- Licensed under the Apache License, Version 2.0 -->
-<!-- verified: 2026-03-10 -->
+<!-- verified: 2026-04-02 -->
 
 # Key Types & Interfaces
 
@@ -133,14 +133,28 @@ Each pipeline section is self-contained; no cross-section inheritance.
 
 ### Defaults
 - Provider: "ollama", Model: "qwen3", BaseURL: "http://localhost:11434"
+- claude-cli: extraction-only (chat rejected by config validation),
+  requires explicit model, base_url/api_key ignored
 - MaxPages: 0, CacheTTL: 30 days, LLMTimeout: 5m, OCR TSV threshold: 70
 
 ## LLM Types (internal/llm/)
 
+### Interfaces (provider.go)
+- Base: shared model management (Model, SetModel, Ping, ListModels, Timeout, etc.)
+- ChatProvider: Base + ChatStream(ctx, messages) -- chat pipeline
+- ExtractionProvider: Base + ExtractStream(ctx, messages, schema) -- extraction pipeline
+
 ### Client (client.go)
-- Wraps any-llm-go provider
-- Chat(ctx, messages, system, opts...) - streaming
-- SetThinking(level), Model(), Provider(), BaseURL()
+- Wraps any-llm-go provider, satisfies both ChatProvider and ExtractionProvider
+- ChatStream: streaming text responses (NL->SQL, summaries)
+- ExtractStream: streaming JSON schema-constrained responses
+- SetThinking(level), Model(), ProviderName(), BaseURL()
+
+### claudecli.Client (internal/claudecli/)
+- Implements ExtractionProvider by shelling out to claude CLI binary
+- ExtractStream: NDJSON parser, input_json_delta events, first-turn early stop
+- Uses cmdFactory DI for testability (TestHelperProcess re-exec pattern)
+- Flags: --tools "" --disable-slash-commands --no-chrome --setting-sources local
 
 ### Extract Types (internal/extract/)
 - Extractor interface: Extract(ctx, data, mime) ([]TextSource, error)

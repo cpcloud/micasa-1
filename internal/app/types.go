@@ -103,7 +103,7 @@ type extractState struct {
 	extractionEnabled  bool
 	ocrTSV             bool
 	ocrConfThreshold   int
-	extractionClient   *llm.Client
+	extractionClient   llm.ExtractionProvider
 	extractors         []extract.Extractor
 	extractionReady    bool
 

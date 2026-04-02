@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Phillip Cloud -->
 <!-- Licensed under the Apache License, Version 2.0 -->
-<!-- verified: 2026-03-07 -->
+<!-- verified: 2026-04-02 -->
 
 # Project Structure
 
@@ -83,10 +83,14 @@ internal/
     sqlcontext.go           Schema context for LLM
     tools.go                Tool availability checks
     ocr_progress.go         OCR progress tracking
-  llm/                      LLM client
-    client.go               Client wrapping any-llm-go
+  llm/                      LLM interfaces and any-llm-go client
+    provider.go             Base, ChatProvider, ExtractionProvider interfaces
+    client.go               Client wrapping any-llm-go (satisfies both interfaces)
     prompt.go               System prompts (SQL gen, summary, fallback)
     sqlfmt.go               SQL formatting
+  claudecli/                Claude CLI subprocess backend
+    client.go               Client implementing ExtractionProvider via claude binary
+    client_test.go          Tests with TestHelperProcess mock
   fake/                     Demo data generator
     fake.go                 HomeFaker (seeded gofakeit)
     words.go                Word lists

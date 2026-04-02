@@ -52,27 +52,6 @@ type StreamChunk struct {
 	Err     error
 }
 
-// chatParams holds options that can be modified per-request.
-type chatParams struct {
-	responseFormat *anyllm.ResponseFormat
-}
-
-// ChatOption configures a chat completion request.
-type ChatOption func(*chatParams)
-
-// WithJSONSchema constrains the model output to match the given JSON Schema.
-func WithJSONSchema(name string, schema map[string]any) ChatOption {
-	return func(p *chatParams) {
-		p.responseFormat = &anyllm.ResponseFormat{
-			Type: "json_schema",
-			JSONSchema: &anyllm.JSONSchema{
-				Name:   name,
-				Schema: schema,
-			},
-		}
-	}
-}
-
 const providerOllama = "ollama"
 
 // localProviders are providers that run on the user's machine.
@@ -211,8 +190,8 @@ func toMessages(msgs []Message) []anyllm.Message {
 	return out
 }
 
-// completionParams builds a CompletionParams from the client state and options.
-func (c *Client) completionParams(messages []Message, opts []ChatOption) anyllm.CompletionParams {
+// completionParams builds base CompletionParams from the client state.
+func (c *Client) completionParams(messages []Message) anyllm.CompletionParams {
 	temp := 0.0
 	params := anyllm.CompletionParams{
 		Model:       c.model,
@@ -221,14 +200,6 @@ func (c *Client) completionParams(messages []Message, opts []ChatOption) anyllm.
 	}
 	if c.effort != "" {
 		params.ReasoningEffort = anyllm.ReasoningEffort(c.effort)
-	}
-
-	var cp chatParams
-	for _, opt := range opts {
-		opt(&cp)
-	}
-	if cp.responseFormat != nil {
-		params.ResponseFormat = cp.responseFormat
 	}
 	return params
 }
@@ -292,34 +263,77 @@ func (c *Client) Ping(ctx context.Context) error {
 	)
 }
 
-// ChatComplete sends a non-streaming chat completion request and returns the
-// full response content.
-func (c *Client) ChatComplete(
-	ctx context.Context,
-	messages []Message,
-	opts ...ChatOption,
-) (string, error) {
-	params := c.completionParams(messages, opts)
-
-	resp, err := c.provider.Completion(ctx, params)
-	if err != nil {
-		return "", c.wrapError(err)
-	}
-	if len(resp.Choices) == 0 {
-		return "", errors.New("no choices in response")
-	}
-	return resp.Choices[0].Message.ContentString(), nil
-}
-
-// ChatStream sends a streaming chat completion request and returns a channel
-// of StreamChunk values. The channel closes when the response completes or
+// ChatStream sends a streaming chat completion and returns a channel of
+// StreamChunk values. The channel closes when the response completes or
 // the context is cancelled. Callers must drain the channel.
 func (c *Client) ChatStream(
 	ctx context.Context,
 	messages []Message,
-	opts ...ChatOption,
 ) (<-chan StreamChunk, error) {
-	params := c.completionParams(messages, opts)
+	params := c.completionParams(messages)
+
+	chunks, errs := c.provider.CompletionStream(ctx, params)
+
+	out := make(chan StreamChunk, 16)
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case chunk, ok := <-chunks:
+				if !ok {
+					if e, eOK := <-errs; eOK && e != nil {
+						select {
+						case out <- StreamChunk{Err: c.wrapError(e)}:
+						case <-ctx.Done():
+						}
+					}
+					return
+				}
+				content := ""
+				done := false
+				if len(chunk.Choices) > 0 {
+					content = chunk.Choices[0].Delta.Content
+					done = chunk.Choices[0].FinishReason != ""
+				}
+				select {
+				case out <- StreamChunk{Content: content, Done: done}:
+				case <-ctx.Done():
+					return
+				}
+				if done {
+					return
+				}
+			case err, ok := <-errs:
+				if ok && err != nil {
+					select {
+					case out <- StreamChunk{Err: c.wrapError(err)}:
+					case <-ctx.Done():
+					}
+				}
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out, nil
+}
+
+// ExtractStream sends a streaming extraction request constrained by a JSON
+// schema and returns a channel of StreamChunk values.
+func (c *Client) ExtractStream(
+	ctx context.Context,
+	messages []Message,
+	schema map[string]any,
+) (<-chan StreamChunk, error) {
+	params := c.completionParams(messages)
+	params.ResponseFormat = &anyllm.ResponseFormat{
+		Type: "json_schema",
+		JSONSchema: &anyllm.JSONSchema{
+			Name:   "extraction_operations",
+			Schema: schema,
+		},
+	}
 
 	chunks, errs := c.provider.CompletionStream(ctx, params)
 

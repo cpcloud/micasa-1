@@ -902,6 +902,65 @@ func TestChatEnvVars(t *testing.T) {
 	assert.Equal(t, "sk-openai-from-env", cfg.Chat.LLM.APIKey)
 }
 
+// --- claude-cli provider validation ---
+
+func TestClaudeCLIProviderValidation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("extraction with explicit claude model passes", func(t *testing.T) {
+		t.Parallel()
+		path := writeConfig(t, `[extraction.llm]
+provider = "claude-cli"
+model = "claude-sonnet-4-5-latest"
+`)
+		_, err := LoadFromPath(path)
+		require.NoError(t, err)
+	})
+
+	t.Run("extraction with empty model rejected", func(t *testing.T) {
+		t.Parallel()
+		path := writeConfig(t, `[extraction.llm]
+provider = "claude-cli"
+model = ""
+`)
+		_, err := LoadFromPath(path)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "claude-cli")
+	})
+
+	t.Run("extraction with default model rejected", func(t *testing.T) {
+		t.Parallel()
+		path := writeConfig(t, `[extraction.llm]
+provider = "claude-cli"
+`)
+		_, err := LoadFromPath(path)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "claude-cli")
+	})
+
+	t.Run("whitespace-only model rejected", func(t *testing.T) {
+		t.Parallel()
+		path := writeConfig(t, `[extraction.llm]
+provider = "claude-cli"
+model = "   "
+`)
+		_, err := LoadFromPath(path)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "claude-cli")
+	})
+
+	t.Run("chat provider rejected", func(t *testing.T) {
+		t.Parallel()
+		path := writeConfig(t, `[chat.llm]
+provider = "claude-cli"
+model = "claude-sonnet-4-5-latest"
+`)
+		_, err := LoadFromPath(path)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "chat")
+	})
+}
+
 // --- File permissions ---
 
 func writeConfigPerm(t *testing.T, content string, perm os.FileMode) string {

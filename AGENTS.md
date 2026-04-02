@@ -300,6 +300,18 @@ details; do not duplicate that detail here.
 
 ### Architecture and code style
 
+- **No test infrastructure in production types**: Never add fields,
+  methods, or options to production structs solely to support tests
+  (e.g. `testEnv`, `testArgs`, mock flags). Use dependency injection
+  via interfaces or function values that serve both production and test
+  callers. If a type needs a different behavior in tests, inject the
+  behavior -- don't bolt test scaffolding onto the real thing.
+- **No shuttle fields**: Never add a struct field that exists only to
+  carry data from an option/constructor argument to a later
+  construction step (e.g. `binPathOverride` set by an option, consumed
+  once in the constructor, then cleared). The option should do its work
+  directly -- resolve, validate, and assign the final value -- rather
+  than stashing an intermediate on the struct.
 - **Never switch on bare integers that represent enums**: Define typed
   `iota` constants. The `exhaustive` linter catches missing cases.
 - **Use stdlib/codebase constants**: No magic numbers when `math.MaxInt64`

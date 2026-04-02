@@ -15,12 +15,12 @@ import (
 // OCR, and LLM-powered structured extraction. Each layer is independent
 // and gracefully degrades when its dependencies are unavailable.
 type Pipeline struct {
-	LLMClient     *llm.Client   // nil = skip LLM extraction
-	Extractors    []Extractor   // nil = DefaultExtractors(0, 0, true)
-	Schema        SchemaContext // DDL + entity rows for prompt
-	DocID         string        // document ID for UPDATE operations
-	SendTSV       bool          // send spatial layout annotations to LLM
-	ConfThreshold int           // confidence threshold for spatial annotations
+	LLMClient     llm.ExtractionProvider // nil = skip LLM extraction
+	Extractors    []Extractor            // nil = DefaultExtractors(0, 0, true)
+	Schema        SchemaContext          // DDL + entity rows for prompt
+	DocID         string                 // document ID for UPDATE operations
+	SendTSV       bool                   // send spatial layout annotations to LLM
+	ConfThreshold int                    // confidence threshold for spatial annotations
 }
 
 // Result holds the output of a pipeline run.
@@ -133,11 +133,13 @@ func (p *Pipeline) extractWithLLM(
 		ConfThreshold: p.ConfThreshold,
 	})
 
-	raw, err := p.LLMClient.ChatComplete(
-		ctx, messages, llm.WithJSONSchema("extraction_operations", OperationsSchema()),
-	)
+	ch, err := p.LLMClient.ExtractStream(ctx, messages, OperationsSchema())
 	if err != nil {
-		return nil, "", fmt.Errorf("llm chat: %w", err)
+		return nil, "", fmt.Errorf("llm extract: %w", err)
+	}
+	raw, err := drainStream(ch)
+	if err != nil {
+		return nil, "", fmt.Errorf("llm extract: %w", err)
 	}
 
 	ops, err := ParseOperations(raw)
@@ -150,4 +152,17 @@ func (p *Pipeline) extractWithLLM(
 	}
 
 	return ops, raw, nil
+}
+
+// drainStream reads all chunks from a stream and returns the
+// concatenated content.
+func drainStream(ch <-chan llm.StreamChunk) (string, error) {
+	var b strings.Builder
+	for chunk := range ch {
+		if chunk.Err != nil {
+			return b.String(), chunk.Err
+		}
+		b.WriteString(chunk.Content)
+	}
+	return b.String(), nil
 }

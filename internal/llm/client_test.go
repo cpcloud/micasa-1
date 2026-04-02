@@ -93,22 +93,7 @@ func TestPingAnthropicNoOp(t *testing.T) {
 	assert.NoError(t, client.Ping(t.Context()))
 }
 
-func TestChatCompleteSuccess(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		jsonResponse(w, `{"choices":[{"message":{"content":"SELECT COUNT(*) FROM projects"}}]}`)
-	}))
-	defer srv.Close()
-
-	client := newTestClient(t, srv.URL+"/v1", "test-model")
-	result, err := client.ChatComplete(t.Context(), []Message{
-		{Role: "user", Content: "how many projects?"},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "SELECT COUNT(*) FROM projects", result)
-}
-
-func TestChatCompleteWithJSONSchema(t *testing.T) {
+func TestExtractStreamPassesSchema(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
@@ -120,34 +105,41 @@ func TestChatCompleteWithJSONSchema(t *testing.T) {
 			return
 		}
 		assert.Equal(t, "json_schema", rf["type"])
-		js, ok := rf["json_schema"].(map[string]any)
-		if !assert.True(t, ok, "response_format should include json_schema") {
-			return
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		for _, line := range []string{
+			`data: {"choices":[{"delta":{"content":"{\"ok\":true}"},"finish_reason":""}]}`,
+			`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+		} {
+			_, _ = fmt.Fprintln(w, line)
+			_, _ = fmt.Fprintln(w)
+			if flusher != nil {
+				flusher.Flush()
+			}
 		}
-		assert.Equal(t, "test_schema", js["name"])
-		schema, ok := js["schema"].(map[string]any)
-		if !assert.True(t, ok, "json_schema should include schema") {
-			return
-		}
-		assert.Equal(t, "object", schema["type"])
-		jsonResponse(w, `{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`)
 	}))
 	defer srv.Close()
 
 	schema := map[string]any{
 		"type":       "object",
 		"properties": map[string]any{"ok": map[string]any{"type": "boolean"}},
-		"required":   []any{"ok"},
 	}
 	client := newTestClient(t, srv.URL+"/v1", "test-model")
-	result, err := client.ChatComplete(t.Context(), []Message{
+	ch, err := client.ExtractStream(t.Context(), []Message{
 		{Role: "user", Content: "extract"},
-	}, WithJSONSchema("test_schema", schema))
+	}, schema)
 	require.NoError(t, err)
-	assert.Contains(t, result, "ok")
+
+	var content strings.Builder
+	for chunk := range ch {
+		require.NoError(t, chunk.Err)
+		content.WriteString(chunk.Content)
+	}
+	assert.Contains(t, content.String(), "ok")
 }
 
-func TestChatCompleteWithoutJSONSchema(t *testing.T) {
+func TestChatStreamNoResponseFormat(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
@@ -155,48 +147,35 @@ func TestChatCompleteWithoutJSONSchema(t *testing.T) {
 			return
 		}
 		_, hasRF := body["response_format"]
-		assert.False(t, hasRF, "request should not include response_format")
-		jsonResponse(w, `{"choices":[{"message":{"content":"hello"}}]}`)
+		assert.False(t, hasRF, "ChatStream should not include response_format")
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		for _, line := range []string{
+			`data: {"choices":[{"delta":{"content":"hello"},"finish_reason":""}]}`,
+			`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+		} {
+			_, _ = fmt.Fprintln(w, line)
+			_, _ = fmt.Fprintln(w)
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
 	}))
 	defer srv.Close()
 
 	client := newTestClient(t, srv.URL+"/v1", "test-model")
-	result, err := client.ChatComplete(t.Context(), []Message{
+	ch, err := client.ChatStream(t.Context(), []Message{
 		{Role: "user", Content: "hi"},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "hello", result)
-}
 
-func TestChatCompleteServerError(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = fmt.Fprint(w, `{"error":{"message":"model crashed","type":"server_error"}}`)
-	}))
-	defer srv.Close()
-
-	client := newTestClient(t, srv.URL+"/v1", "test-model")
-	_, err := client.ChatComplete(t.Context(), []Message{
-		{Role: "user", Content: "hi"},
-	})
-	assert.Error(t, err)
-}
-
-func TestChatCompleteEmptyChoices(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		jsonResponse(w, `{"choices":[]}`)
-	}))
-	defer srv.Close()
-
-	client := newTestClient(t, srv.URL+"/v1", "test-model")
-	_, err := client.ChatComplete(t.Context(), []Message{
-		{Role: "user", Content: "hi"},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no choices")
+	var content strings.Builder
+	for chunk := range ch {
+		require.NoError(t, chunk.Err)
+		content.WriteString(chunk.Content)
+	}
+	assert.Equal(t, "hello", content.String())
 }
 
 func TestModelAndBaseURL(t *testing.T) {
@@ -644,9 +623,9 @@ func TestWrapErrorGeneric(t *testing.T) {
 	assert.Equal(t, orig, err)
 }
 
-// TestChatCompleteWithEffort verifies that setting an effort level causes
+// TestChatStreamWithEffort verifies that setting an effort level causes
 // the reasoning_effort parameter to be sent to the server.
-func TestChatCompleteWithEffort(t *testing.T) {
+func TestChatStreamWithEffort(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
@@ -655,19 +634,35 @@ func TestChatCompleteWithEffort(t *testing.T) {
 		}
 		assert.Equal(t, "medium", body["reasoning_effort"],
 			"reasoning_effort should be set when effort is configured")
-		jsonResponse(
-			w, `{"choices":[{"message":{"content":"thought about it"}}]}`,
-		)
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		for _, line := range []string{
+			`data: {"choices":[{"delta":{"content":"thought about it"},"finish_reason":""}]}`,
+			`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+		} {
+			_, _ = fmt.Fprintln(w, line)
+			_, _ = fmt.Fprintln(w)
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
 	}))
 	defer srv.Close()
 
 	client := newTestClient(t, srv.URL+"/v1", "test-model")
 	client.SetEffort("medium")
-	result, err := client.ChatComplete(t.Context(), []Message{
+	ch, err := client.ChatStream(t.Context(), []Message{
 		{Role: "user", Content: "think hard"},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "thought about it", result)
+
+	var content strings.Builder
+	for chunk := range ch {
+		require.NoError(t, chunk.Err)
+		content.WriteString(chunk.Content)
+	}
+	assert.Equal(t, "thought about it", content.String())
 }
 
 // TestChatStreamMidStreamDisconnect verifies that when a server sends partial

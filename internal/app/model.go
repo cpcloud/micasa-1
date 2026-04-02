@@ -20,6 +20,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
+	"github.com/micasa-dev/micasa/internal/claudecli"
 	"github.com/micasa-dev/micasa/internal/config"
 	"github.com/micasa-dev/micasa/internal/data"
 	"github.com/micasa-dev/micasa/internal/extract"
@@ -186,7 +187,7 @@ type Model struct {
 	store                 *data.Store
 	dbPath                string
 	configPath            string
-	llmClient             *llm.Client
+	llmClient             llm.ChatProvider
 	chatCfg               chatConfig
 	filePickerDir         string // starting directory for document file picker
 	ex                    extractState
@@ -256,7 +257,7 @@ func NewModel(store *data.Store, options Options) (*Model, error) {
 		}
 	}()
 
-	var client *llm.Client
+	var client llm.ChatProvider
 	chatCfg := options.ChatConfig
 	if chatCfg.Enabled {
 		model := chatCfg.Model
@@ -874,7 +875,7 @@ func (m *Model) formatPullProgress(msg pullProgressMsg) string {
 // extractionLLMClient returns the LLM client configured for extraction,
 // or nil if extraction is not available. The client is created once and
 // cached. Each pipeline is fully independent -- no fallback to chat config.
-func (m *Model) extractionLLMClient() *llm.Client {
+func (m *Model) extractionLLMClient() llm.ExtractionProvider {
 	if m.ex.extractionClient != nil {
 		return m.ex.extractionClient
 	}
@@ -889,15 +890,25 @@ func (m *Model) extractionLLMClient() *llm.Client {
 		return nil
 	}
 
-	c, err := llm.NewClient(provider, baseURL, model, apiKey, timeout)
-	if err != nil {
-		return nil
+	var client llm.ExtractionProvider
+	if provider == "claude-cli" {
+		cc, err := claudecli.NewClient(model, timeout)
+		if err != nil {
+			return nil
+		}
+		client = cc
+	} else {
+		cc, err := llm.NewClient(provider, baseURL, model, apiKey, timeout)
+		if err != nil {
+			return nil
+		}
+		client = cc
 	}
 	if m.ex.extractionEffort != "" {
-		c.SetEffort(m.ex.extractionEffort)
+		client.SetEffort(m.ex.extractionEffort)
 	}
-	m.ex.extractionClient = c
-	return c
+	m.ex.extractionClient = client
+	return client
 }
 
 // afterDocumentSave returns a tea.Cmd to run async extraction (text and/or

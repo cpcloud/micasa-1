@@ -701,6 +701,7 @@ var providers = []string{
 	"mistral",
 	"llamacpp",
 	"llamafile",
+	"claude-cli",
 }
 
 func providerNames() []string { return providers }

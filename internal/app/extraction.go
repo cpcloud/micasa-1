@@ -4,7 +4,9 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -537,10 +539,10 @@ func (m *Model) llmExtractCmd(ctx context.Context, ex *extractionLogState) tea.C
 			SendTSV:       m.ex.ocrTSV,
 			ConfThreshold: m.ex.ocrConfThreshold,
 		})
-		ch, err := client.ChatStream(
+		ch, err := client.ExtractStream(
 			llmCtx,
 			messages,
-			llm.WithJSONSchema("extraction_operations", extract.OperationsSchema()),
+			extract.OperationsSchema(),
 		)
 		if err != nil {
 			return extractionLLMChunkMsg{ID: id, Err: err, Done: true}
@@ -772,12 +774,15 @@ func (m *Model) handleExtractionLLMChunk(msg extractionLLMChunkMsg) tea.Cmd {
 		step.Logs = strings.Split(ex.llmAccum.String(), "\n")
 	}
 
-	if msg.Done {
+	if msg.Done && step.Status == stepRunning {
 		ex.cancelLLMTimeout()
 		step.Elapsed = time.Since(step.Started)
 
-		// Parse and validate operations; hold for accept.
+		// Pretty-print the accumulated JSON for the log viewport.
 		response := ex.llmAccum.String()
+		if pretty, err := prettyJSON(response); err == nil {
+			step.Logs = strings.Split(pretty, "\n")
+		}
 		ops, err := extract.ParseOperations(response)
 		if err != nil {
 			step.Status = stepFailed
@@ -1253,7 +1258,7 @@ func (m *Model) switchExtractionModel(name string, isLocal bool) tea.Cmd {
 		}
 		ctx, cancel := context.WithTimeout(appCtx, timeout)
 		defer cancel()
-		models, _ := client.ListModels(ctx)
+		models, _ := client.ListModels(ctx) // best-effort, like chat path
 		for _, model := range models {
 			if model == name || strings.HasPrefix(model, name+":") {
 				return pullProgressMsg{
@@ -1261,6 +1266,15 @@ func (m *Model) switchExtractionModel(name string, isLocal bool) tea.Cmd {
 					Done:   true,
 					Model:  model,
 				}
+			}
+		}
+		if !client.IsLocalServer() {
+			return pullProgressMsg{
+				Err: fmt.Errorf(
+					"model %q not found -- check the model name",
+					name,
+				),
+				Done: true,
 			}
 		}
 		return startPull(appCtx, client.BaseURL(), name)
@@ -1354,4 +1368,13 @@ func (ex *extractionLogState) activePreviewGroup() *previewTableGroup {
 		return &ex.previewGroups[ex.previewTab]
 	}
 	return nil
+}
+
+// prettyJSON indents a compact JSON string.
+func prettyJSON(s string) (string, error) {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, []byte(s), "", "  "); err != nil {
+		return "", fmt.Errorf("indent JSON: %w", err)
+	}
+	return buf.String(), nil
 }
