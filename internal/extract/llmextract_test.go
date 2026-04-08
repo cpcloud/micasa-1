@@ -170,24 +170,21 @@ func TestStripCodeFences(t *testing.T) {
 	}
 }
 
-func TestOperationExtractionRules_CoversAllTables(t *testing.T) {
+func TestOperationExtractionRules_CoversSemanticConventions(t *testing.T) {
 	t.Parallel()
-	rules := operationExtractionRules()
-	for _, td := range ExtractionTableDefs {
-		if td.Table == data.TableDocuments {
-			continue
-		}
-		assert.Contains(t, rules, td.Table,
-			"allowed ops section should mention table %s", td.Table)
-		for _, ad := range td.Actions {
-			assert.Contains(t, rules, string(ad.Action),
-				"allowed ops section should mention action %s for %s", ad.Action, td.Table)
-		}
-	}
-	assert.Contains(t, rules, "Document field")
+	// The rules section covers what the JSON schema cannot enforce:
+	// semantic conventions (cents, ISO dates), FK resolution, and the
+	// document linking pattern. Allowed tables and actions are enforced
+	// by the schema, not the prompt.
+	rules := operationExtractionRules
+	assert.Contains(t, rules, "cents")
+	assert.Contains(t, rules, "ISO 8601")
+	assert.Contains(t, rules, "foreign key")
+	assert.Contains(t, rules, "entity_kind")
+	assert.Contains(t, rules, "entity_id")
 }
 
-func TestBuildExtractionPrompt_ContainsFewShotExamples(t *testing.T) {
+func TestBuildExtractionPrompt_ContainsDomainHints(t *testing.T) {
 	t.Parallel()
 	msgs := BuildExtractionPrompt(ExtractionPromptInput{
 		DocID:    "1",
@@ -202,13 +199,69 @@ func TestBuildExtractionPrompt_ContainsFewShotExamples(t *testing.T) {
 	})
 
 	sys := msgs[0].Content
-	assert.Contains(t, sys, "Worked examples")
-	assert.Contains(t, sys, "Contractor invoice")
+	assert.Contains(t, sys, "Document type hints")
+	// Each writable extraction target needs at least one hint that
+	// distinguishes the document classes producing it. Without these
+	// hints the schema accepts the row but the model has no domain
+	// context for when to choose it -- omissions here have caused
+	// service receipts to be misclassified as quotes and contractor
+	// invoices for project work to be dropped entirely.
+	assert.Contains(t, sys, "Contractor proposal")
 	assert.Contains(t, sys, "Appliance manual")
-	assert.Contains(t, sys, "Home inspection report")
-	assert.Contains(t, sys, "Garcia Plumbing LLC")
-	assert.Contains(t, sys, "SHPM65Z55N")
-	assert.Contains(t, sys, "Midwest Home Inspectors")
+	assert.Contains(t, sys, "Inspection report")
+	assert.Contains(t, sys, "Service receipt")
+	// Quotes hold both estimates and invoices for one-off project work --
+	// there is no separate invoice table. The hints must route project
+	// invoices specifically to quotes; a bare "invoice" substring is not
+	// enough because the service-maintenance hint also mentions invoices,
+	// and the model would drop project invoices on the floor if only the
+	// maintenance routing survived a future trim. Lock the exact wording
+	// for both the contractor hint and the preamble so neither can be
+	// removed without breaking this test.
+	assert.Contains(
+		t,
+		sys,
+		"proposal, bid, or invoice for project work",
+		"contractor hint must explicitly route project invoices to quotes",
+	)
+	assert.Contains(
+		t,
+		sys,
+		"invoices for one-off project work",
+		"preamble must state that quotes hold invoices for one-off project work",
+	)
+	assert.Contains(
+		t,
+		sys,
+		data.TableServiceLogEntries,
+		"hints must mention service_log_entries by table name so the model picks the right action target",
+	)
+}
+
+// TestBuildExtractionPrompt_OmitsSchemaRedundantSections asserts that the
+// prompt no longer duplicates content the JSON schema already enforces:
+// JSON shape examples, "output ONLY JSON" instructions, the allowed-ops
+// table, or full input/output worked examples.
+func TestBuildExtractionPrompt_OmitsSchemaRedundantSections(t *testing.T) {
+	t.Parallel()
+	msgs := BuildExtractionPrompt(ExtractionPromptInput{
+		DocID:    "1",
+		Filename: "test.pdf",
+		MIME:     "application/pdf",
+		Schema: SchemaContext{
+			DDL: map[string]string{
+				data.TableVendors: "CREATE TABLE `vendors` (`id` integer)",
+			},
+		},
+		Sources: []TextSource{{Tool: "pdftotext", Text: "text"}},
+	})
+
+	sys := msgs[0].Content
+	assert.NotContains(t, sys, "Output format")
+	assert.NotContains(t, sys, "Output ONLY")
+	assert.NotContains(t, sys, "Allowed operations")
+	assert.NotContains(t, sys, "Worked examples")
+	assert.NotContains(t, sys, "code fences")
 }
 
 // --- OCR TSV prompt tests ---
