@@ -1,3 +1,6 @@
+<!-- Copyright 2026 Phillip Cloud -->
+<!-- Licensed under the Apache License, Version 2.0 -->
+
 # Issue #923: `go install` error
 
 ## Root cause
