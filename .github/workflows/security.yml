@@ -23,6 +23,7 @@ jobs:
       - name: Harden Runner
         uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2.18.0
         with:
+          deploy-on-self-hosted-vm: true
           egress-policy: block
           disable-telemetry: true
           disable-sudo-and-containers: true
@@ -60,6 +61,7 @@ jobs:
       - name: Harden Runner
         uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2.18.0
         with:
+          deploy-on-self-hosted-vm: true
           egress-policy: block
           disable-telemetry: true
           allowed-endpoints: >
@@ -94,6 +96,7 @@ jobs:
       - name: Harden Runner
         uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2.18.0
         with:
+          deploy-on-self-hosted-vm: true
           egress-policy: block
           disable-telemetry: true
           disable-sudo-and-containers: true
@@ -132,6 +135,7 @@ jobs:
       - name: Harden Runner
         uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2.18.0
         with:
+          deploy-on-self-hosted-vm: true
           egress-policy: block
           disable-telemetry: true
           allowed-endpoints: >
@@ -165,6 +169,7 @@ jobs:
       - name: Harden Runner
         uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2.18.0
         with:
+          deploy-on-self-hosted-vm: true
           egress-policy: block
           disable-telemetry: true
           disable-sudo-and-containers: true
