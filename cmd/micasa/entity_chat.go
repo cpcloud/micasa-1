@@ -4,7 +4,7 @@
 package main
 
 import (
-	"fmt"
+	"strconv"
 
 	"github.com/micasa-dev/micasa/internal/data"
 	"github.com/spf13/cobra"
@@ -12,7 +12,10 @@ import (
 
 func chatInputCols() []showCol[data.ChatInput] {
 	return []showCol[data.ChatInput]{
-		{header: "ID", value: func(c data.ChatInput) string { return fmt.Sprintf("%d", c.ID) }},
+		{
+			header: "ID",
+			value:  func(c data.ChatInput) string { return strconv.FormatUint(uint64(c.ID), 10) },
+		},
 		{header: "INPUT", value: func(c data.ChatInput) string { return c.Input }},
 		{
 			header: "CREATED AT",
