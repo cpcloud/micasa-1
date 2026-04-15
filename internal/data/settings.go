@@ -162,3 +162,34 @@ func (s *Store) LoadChatHistory() ([]string, error) {
 	}
 	return result, nil
 }
+
+// ListChatInputs returns all chat inputs ordered by ID ascending.
+func (s *Store) ListChatInputs() ([]ChatInput, error) {
+	var entries []ChatInput
+	if err := s.db.Order("id ASC").Find(&entries).Error; err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+// DeleteChatInput removes a single chat input by ID.
+func (s *Store) DeleteChatInput(id string) error {
+	result := s.db.Where("id = ?", id).Delete(&ChatInput{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("chat input %s not found", id)
+	}
+	return nil
+}
+
+// ListDeletionRecords returns all deletion audit records ordered by
+// deleted_at descending (most recent first).
+func (s *Store) ListDeletionRecords() ([]DeletionRecord, error) {
+	var records []DeletionRecord
+	if err := s.db.Order("deleted_at DESC, id DESC").Find(&records).Error; err != nil {
+		return nil, err
+	}
+	return records, nil
+}

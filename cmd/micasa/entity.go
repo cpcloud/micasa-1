@@ -339,6 +339,8 @@ func newDBCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newApplianceCmd(),
+		newChatCmd(),
+		newDeletionCmd(),
 		newDocumentCmd(),
 		newHouseCmd(),
 		newIncidentCmd(),

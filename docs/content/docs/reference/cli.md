@@ -139,6 +139,8 @@ Read and write entity data.
 ### Subcommands
 
 - [`micasa db appliance`](#micasa-db-appliance) -- Manage appliances
+- [`micasa db chat`](#micasa-db-chat) -- View and manage chat history
+- [`micasa db deletion`](#micasa-db-deletion) -- View deletion audit records
 - [`micasa db document`](#micasa-db-document) -- Manage documents
 - [`micasa db house`](#micasa-db-house) -- Manage house profile
 - [`micasa db incident`](#micasa-db-incident) -- Manage incidents
@@ -303,6 +305,105 @@ micasa db appliance restore <id> [database-path] [flags]
 ### See also
 
 - [`micasa db appliance`](#micasa-db-appliance) -- Manage appliances
+
+## micasa db chat
+
+View and manage chat history.
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-h`, `--help` | - | help for chat |
+
+### Subcommands
+
+- [`micasa db chat delete`](#micasa-db-chat-delete) -- Delete a chat history entry
+- [`micasa db chat list`](#micasa-db-chat-list) -- List chat history
+
+### See also
+
+- [`micasa db`](#micasa-db) -- Read and write entity data
+
+## micasa db chat delete
+
+Delete a chat history entry.
+
+### Usage
+
+```
+micasa db chat delete <id> [database-path] [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-h`, `--help` | - | help for delete |
+
+### See also
+
+- [`micasa db chat`](#micasa-db-chat) -- View and manage chat history
+
+## micasa db chat list
+
+List chat history.
+
+### Usage
+
+```
+micasa db chat list [database-path] [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-h`, `--help` | - | help for list |
+| `--table` | - | Output as table |
+
+### See also
+
+- [`micasa db chat`](#micasa-db-chat) -- View and manage chat history
+
+## micasa db deletion
+
+View deletion audit records.
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-h`, `--help` | - | help for deletion |
+
+### Subcommands
+
+- [`micasa db deletion list`](#micasa-db-deletion-list) -- List deletion records
+
+### See also
+
+- [`micasa db`](#micasa-db) -- Read and write entity data
+
+## micasa db deletion list
+
+List deletion records.
+
+### Usage
+
+```
+micasa db deletion list [database-path] [flags]
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-h`, `--help` | - | help for list |
+| `--table` | - | Output as table |
+
+### See also
+
+- [`micasa db deletion`](#micasa-db-deletion) -- View deletion audit records
 
 ## micasa db document
 
