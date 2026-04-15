@@ -264,7 +264,7 @@ func NewModel(store *data.Store, options Options) (*Model, error) {
 		// Prefer the last-used model from the database if available.
 		if persisted, err := store.GetLastModel(); err == nil && persisted != "" {
 			model = persisted
-		} else if chatCfg.Provider == "ollama" {
+		} else if chatCfg.Provider == llm.ProviderOllama {
 			// No persisted model -- try auto-detecting if the server has exactly one.
 			tempClient, err := llm.NewClient(chatCfg.Provider, chatCfg.BaseURL, model, chatCfg.APIKey, chatCfg.Timeout)
 			if err == nil {
@@ -872,8 +872,10 @@ func (m *Model) formatPullProgress(msg pullProgressMsg) string {
 }
 
 // extractionLLMClient returns the LLM client configured for extraction,
-// or nil if extraction is not available. The client is created once and
-// cached. Each pipeline is fully independent -- no fallback to chat config.
+// or nil if extraction is not available. A successful client is cached;
+// failures are retried on each call (the last error is stored in
+// extractionClientErr for status bar surfacing by callers).
+// Each pipeline is fully independent -- no fallback to chat config.
 func (m *Model) extractionLLMClient() llm.ExtractionProvider {
 	if m.ex.extractionClient != nil {
 		return m.ex.extractionClient
@@ -893,12 +895,14 @@ func (m *Model) extractionLLMClient() llm.ExtractionProvider {
 	if provider == "claude-cli" {
 		cc, err := claudecli.NewClient(model, timeout)
 		if err != nil {
+			m.ex.extractionClientErr = err
 			return nil
 		}
 		client = cc
 	} else {
 		cc, err := llm.NewClient(provider, baseURL, model, apiKey, timeout)
 		if err != nil {
+			m.ex.extractionClientErr = err
 			return nil
 		}
 		client = cc
@@ -907,6 +911,7 @@ func (m *Model) extractionLLMClient() llm.ExtractionProvider {
 		client.SetEffort(m.ex.extractionEffort)
 	}
 	m.ex.extractionClient = client
+	m.ex.extractionClientErr = nil
 	return client
 }
 
@@ -929,6 +934,9 @@ func (m *Model) afterDocumentSave() tea.Cmd {
 
 	// Check if LLM extraction is configured and ready.
 	llmReady := m.ex.extractionEnabled && m.extractionLLMClient() != nil && m.ex.extractionReady
+	if m.ex.extractionEnabled && m.ex.extractionClientErr != nil {
+		m.setStatusError("extraction LLM: " + m.ex.extractionClientErr.Error())
+	}
 
 	// Determine if async extraction is needed. Skip OCR when the
 	// document already has extracted text from a previous run.
