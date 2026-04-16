@@ -53,7 +53,7 @@ func TestStatusTextEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	err := runStatus(&buf, &statusOpts{days: 30}, store, now)
 	require.NoError(t, err)
-	assert.Empty(t, buf.String())
+	assert.Empty(t, ansi.Strip(buf.String()))
 }
 
 func TestStatusTextOverdue(t *testing.T) {
@@ -236,13 +236,13 @@ func TestStatusDaysFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err = runStatus(&buf, &statusOpts{days: 10}, store, now)
 	require.NoError(t, err)
-	assert.NotContains(t, buf.String(), "Service heater")
+	assert.NotContains(t, ansi.Strip(buf.String()), "Service heater")
 
 	// With 30-day window: item at 20 days out SHOULD appear
 	buf.Reset()
 	err = runStatus(&buf, &statusOpts{days: 30}, store, now)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "Service heater")
+	assert.Contains(t, ansi.Strip(buf.String()), "Service heater")
 }
 
 func TestStatusOverdueSortOrder(t *testing.T) {
@@ -398,7 +398,7 @@ func TestStatusCLITextClean(t *testing.T) {
 	src := createTestDB(t)
 	out, err := executeCLI("status", src)
 	require.NoError(t, err)
-	assert.Empty(t, out)
+	assert.Empty(t, ansi.Strip(out))
 }
 
 func TestStatusCLITextOverdue(t *testing.T) {
@@ -422,8 +422,9 @@ func TestStatusCLITextOverdue(t *testing.T) {
 	var ee exitError
 	require.ErrorAs(t, err, &ee)
 	assert.Equal(t, 2, ee.code)
-	assert.Contains(t, out, "OVERDUE")
-	assert.Contains(t, out, "CLI overdue item")
+	stripped := ansi.Strip(out)
+	assert.Contains(t, stripped, "OVERDUE")
+	assert.Contains(t, stripped, "CLI overdue item")
 }
 
 func TestStatusCLIJSONClean(t *testing.T) {
