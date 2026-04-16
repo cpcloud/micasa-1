@@ -242,21 +242,24 @@ func writeOverdueText(w io.Writer, styles cliStyles, items []maintenanceStatus) 
 }
 
 func writeUpcomingText(w io.Writer, styles cliStyles, items []maintenanceStatus) error {
-	_ = styles
-	if _, err := fmt.Fprintln(w, "=== UPCOMING ==="); err != nil {
+	if _, err := fmt.Fprintln(w, styles.sectionHeader.Render("UPCOMING")); err != nil {
 		return fmt.Errorf("write upcoming header: %w", err)
 	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "NAME\tDUE"); err != nil {
-		return fmt.Errorf("write upcoming columns: %w", err)
-	}
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(styles.border).
+		Headers("NAME", "DUE").
+		StyleFunc(func(row, _ int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return styles.tableHeader
+			}
+			return lipgloss.NewStyle()
+		})
 	for _, m := range items {
-		if _, err := fmt.Fprintf(tw, "%s\t%s\n", m.Name, data.DaysText(m.Days)); err != nil {
-			return fmt.Errorf("write upcoming row: %w", err)
-		}
+		t.Row(m.Name, data.DaysText(m.Days))
 	}
-	if err := tw.Flush(); err != nil {
-		return fmt.Errorf("flush upcoming table: %w", err)
+	if _, err := fmt.Fprintln(w, t); err != nil {
+		return fmt.Errorf("write upcoming table: %w", err)
 	}
 	return nil
 }

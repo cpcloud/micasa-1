@@ -100,8 +100,8 @@ func TestStatusTextUpcoming(t *testing.T) {
 	err = runStatus(&buf, &statusOpts{days: 30}, store, now)
 	require.NoError(t, err)
 
-	out := buf.String()
-	assert.Contains(t, out, "=== UPCOMING ===")
+	out := ansi.Strip(buf.String())
+	assert.Contains(t, out, "UPCOMING")
 	assert.Contains(t, out, "Inspect roof")
 	assert.Contains(t, out, "15d")
 }
@@ -469,7 +469,7 @@ func TestStatusTextMultipleSections(t *testing.T) {
 
 	out := ansi.Strip(buf.String())
 	assert.Contains(t, out, "OVERDUE")
-	assert.Contains(t, out, "=== UPCOMING ===")
+	assert.Contains(t, out, "UPCOMING")
 	assert.Contains(t, out, "=== INCIDENTS ===")
 	assert.Contains(t, out, "=== ACTIVE PROJECTS ===")
 	assert.Contains(t, out, "Overdue task")
