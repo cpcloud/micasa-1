@@ -714,18 +714,8 @@ func warrantyStyleAt(dateStr string, now time.Time) lipgloss.Style {
 	return warrantyActive
 }
 
-// dateDiffDays returns the number of calendar days from now to target,
-// using each time's local Y/M/D. Positive means target is in the future.
 func dateDiffDays(now, target time.Time) int {
-	nowDate := time.Date(
-		now.Year(), now.Month(), now.Day(),
-		0, 0, 0, 0, time.UTC,
-	)
-	tgtDate := time.Date(
-		target.Year(), target.Month(), target.Day(),
-		0, 0, 0, 0, time.UTC,
-	)
-	return int(math.Round(tgtDate.Sub(nowDate).Hours() / 24))
+	return data.DateDiffDays(now, target)
 }
 
 // firstLine returns the first line of s, trimmed of surrounding whitespace.

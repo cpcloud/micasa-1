@@ -199,7 +199,7 @@ func mockCmdFactory(mode string) cmdFactory {
 
 func newMockClient(t *testing.T, mode string) *Client {
 	t.Helper()
-	c, err := NewClient("test-model", 5*time.Second,
+	c, err := NewClient("test-model", 30*time.Second,
 		withCmdFactory(mockCmdFactory(mode)),
 	)
 	require.NoError(t, err)

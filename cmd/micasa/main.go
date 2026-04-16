@@ -78,9 +78,28 @@ func newRootCmd() *cobra.Command {
 		newQueryCmd(),
 		newGenCLIRefCmd(),
 		newDBCmd(),
+		newStatusCmd(),
 	)
 
 	return root
+}
+
+// exitError is a sentinel error that carries a process exit code.
+// It is not printed to stderr by the error handler.
+type exitError struct {
+	code int
+}
+
+func (e exitError) Error() string { return "" }
+
+// extractExitCode returns the exit code from an exitError, or 1 for
+// any other error.
+func extractExitCode(err error) int {
+	var ee exitError
+	if errors.As(err, &ee) {
+		return ee.code
+	}
+	return 1
 }
 
 func main() {
@@ -91,11 +110,18 @@ func main() {
 		fang.WithVersion(versionString()),
 		fang.WithColorSchemeFunc(wongColorScheme),
 		fang.WithNotifySignal(os.Interrupt),
+		fang.WithErrorHandler(func(w io.Writer, _ fang.Styles, err error) {
+			var ee exitError
+			if errors.As(err, &ee) {
+				return
+			}
+			_, _ = fmt.Fprintln(w, err)
+		}),
 	); err != nil {
 		if errors.Is(err, tea.ErrInterrupted) {
 			os.Exit(130)
 		}
-		os.Exit(1)
+		os.Exit(extractExitCode(err))
 	}
 }
 

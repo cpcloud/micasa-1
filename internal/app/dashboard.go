@@ -890,16 +890,8 @@ func (m *Model) dashToggleAll() {
 // Utility helpers
 // ---------------------------------------------------------------------------
 
-// daysText returns a bare compressed duration like "5d" or "today".
 func daysText(days int) string {
-	if days == 0 {
-		return "today"
-	}
-	abs := days
-	if abs < 0 {
-		abs = -abs
-	}
-	return shortDur(time.Duration(abs) * 24 * time.Hour)
+	return data.DaysText(days)
 }
 
 // daysStyle returns the appropriate style for a timing label, using the
@@ -911,40 +903,12 @@ func (m *Model) daysStyle(days int, overdue bool) lipgloss.Style {
 	return m.styles.DashUpcoming()
 }
 
-// pastDur returns a compressed past-duration string. Sub-minute is "<1m".
 func pastDur(d time.Duration) string {
-	s := shortDur(d)
-	if s == "now" {
-		return "<1m"
-	}
-	return s
+	return data.PastDur(d)
 }
 
-// shortDur returns a compressed duration string like "3d", "2mo", "1y".
-func shortDur(d time.Duration) string {
-	if d < 0 {
-		d = -d
-	}
-	switch {
-	case d < time.Minute:
-		return "now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	case d < 365*24*time.Hour:
-		return fmt.Sprintf("%dmo", int(d.Hours()/(24*30)))
-	default:
-		return fmt.Sprintf("%dy", int(d.Hours()/(24*365)))
-	}
-}
-
-// daysUntil returns the number of calendar days from now to target using
-// each time's local Y/M/D. Negative means target is in the past.
 func daysUntil(now, target time.Time) int {
-	return dateDiffDays(now, target)
+	return data.DateDiffDays(now, target)
 }
 
 func sortByDays(items []maintenanceUrgency) {
