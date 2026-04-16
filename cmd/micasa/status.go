@@ -270,25 +270,38 @@ func writeIncidentsText(
 	incidents []data.Incident,
 	now time.Time,
 ) error {
-	_ = styles
-	if _, err := fmt.Fprintln(w, "=== INCIDENTS ==="); err != nil {
+	if _, err := fmt.Fprintln(w, styles.sectionHeader.Render("INCIDENTS")); err != nil {
 		return fmt.Errorf("write incidents header: %w", err)
 	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "TITLE\tSEVERITY\tREPORTED"); err != nil {
-		return fmt.Errorf("write incidents columns: %w", err)
-	}
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(styles.border).
+		Headers("TITLE", "SEVERITY", "REPORTED").
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return styles.tableHeader
+			}
+			if col == 1 && row >= 0 && row < len(incidents) {
+				switch incidents[row].Severity {
+				case data.IncidentSeverityUrgent:
+					return styles.danger
+				case data.IncidentSeveritySoon:
+					return styles.warning
+				case data.IncidentSeverityWhenever:
+					return styles.muted
+				}
+			}
+			return lipgloss.NewStyle()
+		})
 	for _, inc := range incidents {
 		days := data.DateDiffDays(now, inc.DateNoticed)
 		if days < 0 {
 			days = -days
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", inc.Title, inc.Severity, data.DaysText(days)); err != nil {
-			return fmt.Errorf("write incidents row: %w", err)
-		}
+		t.Row(inc.Title, inc.Severity, data.DaysText(days))
 	}
-	if err := tw.Flush(); err != nil {
-		return fmt.Errorf("flush incidents table: %w", err)
+	if _, err := fmt.Fprintln(w, t); err != nil {
+		return fmt.Errorf("write incidents table: %w", err)
 	}
 	return nil
 }

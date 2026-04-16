@@ -141,10 +141,33 @@ func TestStatusTextIncidents(t *testing.T) {
 	require.ErrorAs(t, err, &ee)
 	assert.Equal(t, 2, ee.code)
 
-	out := buf.String()
-	assert.Contains(t, out, "=== INCIDENTS ===")
+	out := ansi.Strip(buf.String())
+	assert.Contains(t, out, "INCIDENTS")
 	assert.Contains(t, out, "Leaking faucet")
 	assert.Contains(t, out, "urgent")
+}
+
+func TestStatusTextIncidentsWhenever(t *testing.T) {
+	t.Parallel()
+	store := newTestStoreWithMigration(t)
+	now := time.Date(2026, 4, 14, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, store.CreateIncident(&data.Incident{
+		Title:    "Loose trim",
+		Status:   data.IncidentStatusOpen,
+		Severity: data.IncidentSeverityWhenever,
+	}))
+
+	var buf bytes.Buffer
+	err := runStatus(&buf, &statusOpts{days: 30, isDark: true}, store, now)
+	var ee exitError
+	require.ErrorAs(t, err, &ee)
+	assert.Equal(t, 2, ee.code)
+
+	out := buf.String()
+	assert.Contains(t, out, "whenever",
+		"output should contain the severity string")
+	assert.Contains(t, out, "\x1b[",
+		"styled output should contain ANSI escape sequences")
 }
 
 func TestStatusTextActiveProjects(t *testing.T) {
@@ -470,7 +493,7 @@ func TestStatusTextMultipleSections(t *testing.T) {
 	out := ansi.Strip(buf.String())
 	assert.Contains(t, out, "OVERDUE")
 	assert.Contains(t, out, "UPCOMING")
-	assert.Contains(t, out, "=== INCIDENTS ===")
+	assert.Contains(t, out, "INCIDENTS")
 	assert.Contains(t, out, "=== ACTIVE PROJECTS ===")
 	assert.Contains(t, out, "Overdue task")
 	assert.Contains(t, out, "Upcoming task")
