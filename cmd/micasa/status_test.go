@@ -189,8 +189,8 @@ func TestStatusTextActiveProjects(t *testing.T) {
 	require.ErrorAs(t, err, &ee)
 	assert.Equal(t, 2, ee.code)
 
-	out := buf.String()
-	assert.Contains(t, out, "=== ACTIVE PROJECTS ===")
+	out := ansi.Strip(buf.String())
+	assert.Contains(t, out, "ACTIVE PROJECTS")
 	assert.Contains(t, out, "Kitchen remodel")
 	assert.Contains(t, out, "delayed")
 }
@@ -212,8 +212,8 @@ func TestStatusUnderwayProjectDoesNotTriggerExit2(t *testing.T) {
 	err = runStatus(&buf, &statusOpts{days: 30}, store, now)
 	require.NoError(t, err)
 
-	out := buf.String()
-	assert.Contains(t, out, "=== ACTIVE PROJECTS ===")
+	out := ansi.Strip(buf.String())
+	assert.Contains(t, out, "ACTIVE PROJECTS")
 	assert.Contains(t, out, "Fence repair")
 	assert.Contains(t, out, data.ProjectStatusInProgress)
 }
@@ -494,7 +494,7 @@ func TestStatusTextMultipleSections(t *testing.T) {
 	assert.Contains(t, out, "OVERDUE")
 	assert.Contains(t, out, "UPCOMING")
 	assert.Contains(t, out, "INCIDENTS")
-	assert.Contains(t, out, "=== ACTIVE PROJECTS ===")
+	assert.Contains(t, out, "ACTIVE PROJECTS")
 	assert.Contains(t, out, "Overdue task")
 	assert.Contains(t, out, "Upcoming task")
 	assert.Contains(t, out, "Broken pipe")
@@ -572,7 +572,7 @@ func TestStatusTextProjectWithStartDate(t *testing.T) {
 	err = runStatus(&buf, &statusOpts{days: 30}, store, now)
 	require.NoError(t, err)
 
-	out := buf.String()
+	out := ansi.Strip(buf.String())
 	assert.Contains(t, out, "Patio work")
 	assert.Contains(t, out, "14d")
 }

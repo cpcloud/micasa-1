@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"sort"
-	"text/tabwriter"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -312,14 +311,27 @@ func writeProjectsText(
 	projects []data.Project,
 	now time.Time,
 ) error {
-	_ = styles
-	if _, err := fmt.Fprintln(w, "=== ACTIVE PROJECTS ==="); err != nil {
+	if _, err := fmt.Fprintln(w, styles.sectionHeader.Render("ACTIVE PROJECTS")); err != nil {
 		return fmt.Errorf("write projects header: %w", err)
 	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "TITLE\tSTATUS\tSTARTED"); err != nil {
-		return fmt.Errorf("write projects columns: %w", err)
-	}
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(styles.border).
+		Headers("TITLE", "STATUS", "STARTED").
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return styles.tableHeader
+			}
+			if col == 1 && row >= 0 && row < len(projects) {
+				switch projects[row].Status {
+				case data.ProjectStatusDelayed:
+					return styles.danger
+				case data.ProjectStatusInProgress:
+					return styles.success
+				}
+			}
+			return lipgloss.NewStyle()
+		})
 	for _, p := range projects {
 		started := "-"
 		if p.StartDate != nil {
@@ -329,12 +341,10 @@ func writeProjectsText(
 			}
 			started = data.DaysText(days)
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", p.Title, p.Status, started); err != nil {
-			return fmt.Errorf("write projects row: %w", err)
-		}
+		t.Row(p.Title, p.Status, started)
 	}
-	if err := tw.Flush(); err != nil {
-		return fmt.Errorf("flush projects table: %w", err)
+	if _, err := fmt.Fprintln(w, t); err != nil {
+		return fmt.Errorf("write projects table: %w", err)
 	}
 	return nil
 }
