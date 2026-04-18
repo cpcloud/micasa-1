@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	anyllm "github.com/mozilla-ai/any-llm-go"
@@ -455,20 +456,23 @@ func (c *Client) wrapError(err error) error {
 
 // isNetworkError reports whether err represents a connection-level failure
 // (connection refused, unreachable host) as opposed to an application-level
-// error from a server that was reachable. Uses both syscall error matching
-// and string fallbacks for cross-platform compatibility (Windows connectex
-// errors don't always unwrap to syscall.ECONNREFUSED through provider chains).
+// error from a server that was reachable. Tries syscall sentinels first,
+// then falls back to message matching: net/http on Windows wraps
+// "connectex" errors in a way that drops the syscall.Errno layer, so
+// errors.Is(err, syscall.ECONNREFUSED) returns false even for a refused
+// connection (CI proved this on the windows-latest runner). The string
+// fallback is the only way to recognize those cases.
 func isNetworkError(err error) bool {
+	if errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ENETUNREACH) ||
+		errors.Is(err, syscall.EHOSTUNREACH) {
+		return true
+	}
 	msg := err.Error()
-	if strings.Contains(msg, "connection refused") ||
-		strings.Contains(msg, "actively refused") {
-		return true
-	}
-	if strings.Contains(msg, "host is unreachable") ||
-		strings.Contains(msg, "network is unreachable") {
-		return true
-	}
-	return false
+	return strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "actively refused") ||
+		strings.Contains(msg, "host is unreachable") ||
+		strings.Contains(msg, "network is unreachable")
 }
 
 // isLoopbackURL returns true if the URL points to a loopback address.

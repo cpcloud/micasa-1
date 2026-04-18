@@ -78,8 +78,8 @@ navigates to it.
 
 The search uses the Porter stemmer, so related word forms match each other
 (e.g., searching "painting" also finds "painted" and "paint"). Queries are
-case-insensitive. For advanced users, FTS5 operators like `AND`, `OR`, `NOT`,
-quoted phrases, and `*` wildcards are supported.
+case-insensitive. Each whitespace-separated word becomes a prefix match and
+all words must appear in the matching document.
 
 ## Drill columns
 

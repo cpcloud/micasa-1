@@ -171,14 +171,69 @@ func TestSearchDocumentsUpdateReflected(t *testing.T) {
 	assert.Empty(t, results)
 }
 
+// TestSearchDocumentsMalformedTokenizes pins the design intent of the
+// phrase-wrap escape: when a user types something with stray delimiters
+// like "(kitchen" or "kitchen)", the FTS5 tokenizer extracts the inner
+// word and the prefix match still works. This is desirable for type-as-
+// you-go search where partial input should still surface relevant
+// results, not an accidental matching bug.
+func TestSearchDocumentsMalformedTokenizes(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	require.NoError(t, store.CreateDocument(&Document{
+		Title:         "Kitchen Renovation",
+		FileName:      "k.pdf",
+		ExtractedText: "plumber notes",
+	}))
+
+	for _, q := range []string{`(kitchen`, `kitchen)`, `"kitchen`, `kitchen*`} {
+		t.Run(q, func(t *testing.T) {
+			results, err := store.SearchDocuments(q)
+			require.NoError(t, err)
+			require.Len(t, results, 1, "delimiters around %q should not block tokenization", q)
+			assert.Equal(t, "Kitchen Renovation", results[0].Title)
+		})
+	}
+}
+
+// TestSearchDocumentsBadSyntaxGraceful verifies that inputs which would
+// be malformed FTS5 expressions if passed verbatim do not error out and
+// also do not accidentally match real documents. A document is inserted
+// so the no-match assertion is meaningful (an empty store would pass
+// even if the query rewrite broadened matches).
 func TestSearchDocumentsBadSyntaxGraceful(t *testing.T) {
 	t.Parallel()
 	store := newTestStore(t)
 
-	// Unbalanced quotes should not crash.
-	results, err := store.SearchDocuments(`"unclosed`)
-	require.NoError(t, err)
-	assert.Empty(t, results)
+	// Document content uses tokens that don't share any prefix with
+	// the test queries below, so any spurious match indicates a bug
+	// in the rewrite (e.g., a query collapsing to a bare wildcard).
+	require.NoError(t, store.CreateDocument(&Document{
+		Title:         "Zebra",
+		FileName:      "z.pdf",
+		ExtractedText: "rhinoceros giraffe leopard",
+	}))
+
+	bad := []string{
+		`"unclosed`,
+		`unclosed"`,
+		`(kitchen`,
+		`kitchen)`,
+		`((nested`,
+		`"phrase with "" inside`,
+		`***`,
+		`:::`,
+		`+++---`,
+		`(b AND)`,
+	}
+	for _, q := range bad {
+		t.Run(q, func(t *testing.T) {
+			results, err := store.SearchDocuments(q)
+			require.NoError(t, err)
+			assert.Empty(t, results)
+		})
+	}
 }
 
 func TestSearchDocumentsEntityFields(t *testing.T) {
@@ -239,20 +294,28 @@ func TestSearchDocumentsCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestPrepareFTSQuerySimple(t *testing.T) {
+func TestPrepareFTSQuery(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, "hello*", prepareFTSQuery("hello"))
-	assert.Equal(t, "hello* world*", prepareFTSQuery("hello world"))
-}
-
-func TestPrepareFTSQueryOperators(t *testing.T) {
-	t.Parallel()
-	// Queries with operators pass through unchanged.
-	assert.Equal(t, `"exact phrase"`, prepareFTSQuery(`"exact phrase"`))
-	assert.Equal(t, "plumb*", prepareFTSQuery("plumb*"))
-	assert.Equal(t, "a AND b", prepareFTSQuery("a AND b"))
-	assert.Equal(t, "a OR b", prepareFTSQuery("a OR b"))
-	assert.Equal(t, "NOT bad", prepareFTSQuery("NOT bad"))
+	tests := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"hello", `"hello"*`},
+		{"hello world", `"hello"* "world"*`},
+		// Operators become literal phrase tokens, not FTS5 operators.
+		{"a AND b", `"a"* "AND"* "b"*`},
+		{`"exact phrase"`, `"""exact"* "phrase"""*`},
+		// Internal " is doubled per FTS5's escape rule.
+		{`say "hi"`, `"say"* """hi"""*`},
+		// All-special tokens stay wrapped; FTS5 tokenizes them to nothing
+		// and the phrase matches no documents (verified in integration tests).
+		{"***", `"***"*`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			assert.Equal(t, tt.want, prepareFTSQuery(tt.in))
+		})
+	}
 }
 
 func TestRebuildFTSIndex(t *testing.T) {

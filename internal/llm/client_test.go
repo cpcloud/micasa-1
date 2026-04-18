@@ -12,7 +12,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -415,7 +417,7 @@ func TestPingServerDownCloud(t *testing.T) {
 	// Use wrapError directly: a ECONNREFUSED wrapped in ProviderError
 	// from a cloud provider should say "cannot reach ... check your
 	// base_url" and NOT mention ollama.
-	inner := errors.New("dial tcp: connection refused")
+	inner := fmt.Errorf("dial tcp: %w", syscall.ECONNREFUSED)
 	c := &Client{providerName: "openai"}
 	err := c.wrapError(anyllmerrors.NewProviderError("openai", inner))
 	require.Error(t, err)
@@ -476,7 +478,7 @@ func TestCreateProviderAllSupported(t *testing.T) {
 // TestWrapErrorProviderError exercises the wrapError path for ProviderError.
 func TestWrapErrorProviderError(t *testing.T) {
 	t.Parallel()
-	connErr := errors.New("dial tcp: connection refused")
+	connErr := fmt.Errorf("dial tcp: %w", syscall.ECONNREFUSED)
 	tests := []struct {
 		provider string
 		wantMsg  string
@@ -495,6 +497,59 @@ func TestWrapErrorProviderError(t *testing.T) {
 			)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantMsg)
+		})
+	}
+}
+
+// TestIsNetworkError verifies that wrapped syscall sentinels are
+// recognized via errors.Is, regardless of how deeply they are wrapped.
+func TestIsNetworkError(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"bare ECONNREFUSED", syscall.ECONNREFUSED, true},
+		{"bare ENETUNREACH", syscall.ENETUNREACH, true},
+		{"bare EHOSTUNREACH", syscall.EHOSTUNREACH, true},
+		{
+			"net.OpError wrapping ECONNREFUSED",
+			&net.OpError{
+				Op: "dial", Net: "tcp",
+				Err: &os.SyscallError{Syscall: "connect", Err: syscall.ECONNREFUSED},
+			},
+			true,
+		},
+		{
+			"fmt.Errorf wrapping EHOSTUNREACH",
+			fmt.Errorf("dial tcp: %w", syscall.EHOSTUNREACH),
+			true,
+		},
+		{"unrelated error", errors.New("something else broke"), false},
+		{"context.Canceled", context.Canceled, false},
+		// Windows: net/http wraps connectex errors without preserving
+		// the syscall.Errno layer, so the string fallback is the only
+		// way to recognize them. Verbatim error captured from CI.
+		{
+			"windows connectex actively refused",
+			errors.New(
+				"Get \"http://127.0.0.1:1/v1/models\": dial tcp 127.0.0.1:1: " +
+					"connectex: No connection could be made because the target " +
+					"machine actively refused it.",
+			),
+			true,
+		},
+		{
+			"plain connection refused string",
+			errors.New("dial tcp: connection refused"),
+			true,
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, isNetworkError(tt.err))
 		})
 	}
 }
