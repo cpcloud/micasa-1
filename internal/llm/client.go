@@ -456,21 +456,13 @@ func (c *Client) wrapError(err error) error {
 
 // isNetworkError reports whether err represents a connection-level failure
 // (connection refused, unreachable host) as opposed to an application-level
-// error from a server that was reachable. Tries syscall sentinels first;
-// falls back to message matching because some provider chains (notably
-// Windows connectex) wrap errors in a way that loses the syscall layer.
+// error from a server that was reachable. Go's syscall package maps
+// platform-specific connection errors to these cross-platform sentinels,
+// so errors.Is works on Linux, macOS, and Windows alike.
 func isNetworkError(err error) bool {
-	if errors.Is(err, syscall.ECONNREFUSED) ||
+	return errors.Is(err, syscall.ECONNREFUSED) ||
 		errors.Is(err, syscall.ENETUNREACH) ||
-		errors.Is(err, syscall.EHOSTUNREACH) {
-		return true
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "connection refused") ||
-		strings.Contains(msg, "actively refused") ||
-		strings.Contains(msg, "host is unreachable") ||
-		strings.Contains(msg, "network is unreachable") ||
-		strings.Contains(msg, "no route to host")
+		errors.Is(err, syscall.EHOSTUNREACH)
 }
 
 // isLoopbackURL returns true if the URL points to a loopback address.

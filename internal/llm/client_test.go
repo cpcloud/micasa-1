@@ -417,7 +417,7 @@ func TestPingServerDownCloud(t *testing.T) {
 	// Use wrapError directly: a ECONNREFUSED wrapped in ProviderError
 	// from a cloud provider should say "cannot reach ... check your
 	// base_url" and NOT mention ollama.
-	inner := errors.New("dial tcp: connection refused")
+	inner := fmt.Errorf("dial tcp: %w", syscall.ECONNREFUSED)
 	c := &Client{providerName: "openai"}
 	err := c.wrapError(anyllmerrors.NewProviderError("openai", inner))
 	require.Error(t, err)
@@ -478,7 +478,7 @@ func TestCreateProviderAllSupported(t *testing.T) {
 // TestWrapErrorProviderError exercises the wrapError path for ProviderError.
 func TestWrapErrorProviderError(t *testing.T) {
 	t.Parallel()
-	connErr := errors.New("dial tcp: connection refused")
+	connErr := fmt.Errorf("dial tcp: %w", syscall.ECONNREFUSED)
 	tests := []struct {
 		provider string
 		wantMsg  string
@@ -501,11 +501,9 @@ func TestWrapErrorProviderError(t *testing.T) {
 	}
 }
 
-// TestIsNetworkErrorTyped verifies that wrapped syscall sentinels are
-// recognized via errors.Is, not just by string matching. Catches the
-// case where a stdlib error like syscall.EHOSTUNREACH formats as
-// "no route to host" -- which the old string-only check missed.
-func TestIsNetworkErrorTyped(t *testing.T) {
+// TestIsNetworkError verifies that wrapped syscall sentinels are
+// recognized via errors.Is, regardless of how deeply they are wrapped.
+func TestIsNetworkError(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
@@ -535,29 +533,6 @@ func TestIsNetworkErrorTyped(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.want, isNetworkError(tt.err))
-		})
-	}
-}
-
-// TestIsNetworkErrorString verifies the string-fallback path used for
-// Windows connectex wrappings that don't unwrap to syscall sentinels.
-func TestIsNetworkErrorString(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		msg  string
-		want bool
-	}{
-		{"dial tcp: connection refused", true},
-		{"connectex: actively refused", true},
-		{"host is unreachable", true},
-		{"network is unreachable", true},
-		{"no route to host", true},
-		{"some unrelated server error", false},
-	}
-	for _, tt := range cases {
-		t.Run(tt.msg, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.want, isNetworkError(errors.New(tt.msg)))
 		})
 	}
 }
