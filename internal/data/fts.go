@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"gorm.io/gorm"
 )
@@ -20,6 +21,20 @@ const (
 	triggerFTSUpdate = "documents_fts_au"
 
 	tableEntitiesFTS = "entities_fts"
+)
+
+// SearchEntities tuning knobs. Not user-configurable; the eval harness
+// (`micasa eval fts`) is the channel for tuning these.
+//
+// FTS5's BM25 rank is negative for every match (more negative = more
+// relevant). `ftsEntityRankCeiling` is the floor below which a match
+// counts; rows with `rank >= ceiling` are dropped. Initial value 0.0 is
+// deliberately permissive so any match passes; the eval will tighten
+// this once we have real measurements of noise vs signal.
+const (
+	ftsEntityKPerType    = 5   // max rows returned per entity_type
+	ftsEntityRankCeiling = 0.0 // keep only rows with rank strictly less than this
+	ftsEntityTotalCap    = 20  // final cap across all entity_types
 )
 
 // DocumentSearchResult holds a single FTS5 match with metadata for display.
@@ -157,6 +172,11 @@ func (s *Store) SearchDocuments(query string) ([]DocumentSearchResult, error) {
 // literal text, not operators -- the search box is type-as-you-go and
 // partial operator syntax mid-keystroke would otherwise error.
 //
+// This is the right default for long-form search (documents): every
+// word in a multi-word query should contribute. For short, structured
+// entity records see prepareFTSEntityQuery, which OR-joins content
+// words after stripping stopwords.
+//
 // See https://sqlite.org/forum/info/82344cab7c5806980b287ce008975c6585d510e95ac7199de398ff9051ae0907
 func prepareFTSQuery(query string) string {
 	fields := strings.Fields(query)
@@ -165,6 +185,75 @@ func prepareFTSQuery(query string) string {
 		out[i] = `"` + strings.ReplaceAll(w, `"`, `""`) + `"*`
 	}
 	return strings.Join(out, " ")
+}
+
+// entityFTSStopwords drops high-frequency English words that rarely
+// carry semantic weight against entity names and notes. The list is
+// intentionally small: prepareFTSEntityQuery OR-joins the survivors,
+// so "kitchen" needs to stay even when the user wrote "what's the
+// status of the kitchen project?".
+var entityFTSStopwords = map[string]bool{
+	"a": true, "an": true, "the": true, "of": true, "in": true,
+	"on": true, "at": true, "to": true, "for": true, "by": true,
+	"is": true, "are": true, "was": true, "were": true, "be": true,
+	"been": true, "being": true, "have": true, "has": true, "had": true,
+	"do": true, "does": true, "did": true, "will": true, "would": true,
+	"should": true, "could": true, "what": true, "whats": true,
+	"when": true, "where": true, "who": true, "why": true, "how": true,
+	"that": true, "this": true, "these": true, "those": true,
+	"and": true, "or": true, "but": true, "not": true, "no": true,
+	"it": true, "its": true, "i": true, "my": true, "me": true,
+	"you": true, "your": true, "we": true, "our": true,
+	"any": true, "some": true, "all": true, "with": true, "about": true,
+}
+
+// prepareFTSEntityQuery builds an FTS5 MATCH expression suited to
+// short entity records and natural-language user questions. Unlike
+// prepareFTSQuery (which AND-joins), this OR-joins the survivors so a
+// question like "what's the status of the kitchen project?" isn't
+// zero-matched just because "what's" and "the" don't appear in any
+// entity's indexed text.
+//
+// Filtering steps, applied per token:
+//  1. Lowercase.
+//  2. Strip non-letter/digit runes so "project?" becomes "project".
+//  3. Drop tokens shorter than 2 runes (removes stray punctuation and
+//     single-char noise).
+//  4. Drop entityFTSStopwords.
+//
+// Survivors become quoted prefix phrases joined with ` OR `. Ranking
+// is BM25 via FTS5's default, and the ftsEntityRankCeiling caller-side
+// threshold trims low-quality matches.
+//
+// Returns "" when no content words survive; callers treat that the
+// same way as an empty user query.
+func prepareFTSEntityQuery(query string) string {
+	fields := strings.Fields(query)
+	var tokens []string
+	for _, w := range fields {
+		normalized := stripNonAlphaNum(strings.ToLower(w))
+		if len(normalized) < 2 {
+			continue
+		}
+		if entityFTSStopwords[normalized] {
+			continue
+		}
+		tokens = append(tokens, `"`+normalized+`"*`)
+	}
+	return strings.Join(tokens, " OR ")
+}
+
+// stripNonAlphaNum keeps only letters and digits. Used by
+// prepareFTSEntityQuery to drop punctuation glued to words.
+func stripNonAlphaNum(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // RebuildFTSIndex forces a full rebuild of the FTS5 index. Useful after
@@ -590,16 +679,91 @@ func (s *Store) SearchEntities(query string) ([]EntitySearchResult, error) {
 		return nil, nil
 	}
 
-	safeQuery := prepareFTSQuery(query)
+	// Entity records are short and user questions are conversational.
+	// prepareFTSEntityQuery drops stopwords and OR-joins content words
+	// so "what's the status of the kitchen project?" actually matches
+	// rows containing "kitchen" even though "what's" and "the" don't.
+	// Returns "" when every token is a stopword or punctuation.
+	safeQuery := prepareFTSEntityQuery(query)
+	if safeQuery == "" {
+		return nil, nil
+	}
 
+	// Per-type quota and BM25 threshold via window functions. Prevents
+	// one noisy entity type from crowding out the others, and drops
+	// matches below the rank ceiling.
+	//
+	// Three tiers so that:
+	//   - Every matching type gets at least one slot (tier 1: rn == 1 per
+	//     type, i.e. that type's strongest match).
+	//   - Each type can then fill up to ftsEntityKPerType (tier 2: rows
+	//     with 2 <= rn <= K).
+	//   - Remaining room up to ftsEntityTotalCap is filled globally from
+	//     whatever's left (tier 3: rn > K).
+	//
+	// The outer LIMIT ftsEntityTotalCap still applies across the union,
+	// so even with many matching types the total is bounded. Because
+	// tier 1 takes exactly one row per type first, every matching type
+	// is represented as long as the number of matching types does not
+	// exceed ftsEntityTotalCap.
+	//
+	// entity_id tiebreaks rank in every ORDER BY so results are stable
+	// when BM25 scores collide across similarly-shaped rows.
 	var results []EntitySearchResult
 	err := s.db.Raw(fmt.Sprintf(`
+		WITH matches AS (
+			SELECT entity_type, entity_id, entity_name, rank,
+			       ROW_NUMBER() OVER (
+			           PARTITION BY entity_type
+			           ORDER BY rank, entity_id
+			       ) AS rn
+			FROM %s
+			WHERE %s MATCH ? AND rank < ?
+		),
+		tier1 AS (
+			-- one row per matching type: each type's strongest match.
+			SELECT entity_type, entity_id, entity_name, rank
+			FROM matches
+			WHERE rn = 1
+		),
+		tier2 AS (
+			-- up to K per type after tier 1.
+			SELECT entity_type, entity_id, entity_name, rank
+			FROM matches
+			WHERE rn > 1 AND rn <= ?
+			ORDER BY rank, entity_type, entity_id
+			LIMIT MAX(
+			    ? - (SELECT COUNT(*) FROM tier1),
+			    0
+			)
+		),
+		tier3 AS (
+			-- fill remaining global slots after per-type quotas are done.
+			SELECT entity_type, entity_id, entity_name, rank
+			FROM matches
+			WHERE rn > ?
+			ORDER BY rank, entity_type, entity_id
+			LIMIT MAX(
+			    ? - (SELECT COUNT(*) FROM tier1) - (SELECT COUNT(*) FROM tier2),
+			    0
+			)
+		)
 		SELECT entity_type, entity_id, entity_name, rank
-		FROM %s
-		WHERE %s MATCH ?
+		FROM (
+			SELECT * FROM tier1
+			UNION ALL
+			SELECT * FROM tier2
+			UNION ALL
+			SELECT * FROM tier3
+		)
 		ORDER BY rank, entity_type, entity_id
-		LIMIT 20
-	`, tableEntitiesFTS, tableEntitiesFTS), safeQuery).
+		LIMIT ?
+	`, tableEntitiesFTS, tableEntitiesFTS),
+		safeQuery,
+		ftsEntityRankCeiling,
+		ftsEntityKPerType, ftsEntityTotalCap,
+		ftsEntityKPerType, ftsEntityTotalCap,
+		ftsEntityTotalCap).
 		Scan(&results).Error
 	if err != nil {
 		return nil, fmt.Errorf("search entities: %w", err)

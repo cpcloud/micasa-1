@@ -4,6 +4,7 @@
 package data
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -318,6 +319,97 @@ func TestPrepareFTSQuery(t *testing.T) {
 			assert.Equal(t, tt.want, prepareFTSQuery(tt.in))
 		})
 	}
+}
+
+func TestPrepareFTSEntityQuery(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, in, want string
+	}{
+		{"empty", "", ""},
+		{"all stopwords", "what is the of", ""},
+		{"single content word", "plumber", `"plumber"*`},
+		{
+			"strips stopwords and punctuation",
+			"what's the status of the kitchen project?",
+			`"status"* OR "kitchen"* OR "project"*`,
+		},
+		{
+			"or-joins multiple content words",
+			"kitchen remodel budget",
+			`"kitchen"* OR "remodel"* OR "budget"*`,
+		},
+		{
+			"drops 1-char tokens",
+			"a b c kitchen",
+			`"kitchen"*`,
+		},
+		{
+			"drops pure punctuation",
+			"- ? kitchen !",
+			`"kitchen"*`,
+		},
+		{
+			"lowercases",
+			"Kitchen REMODEL",
+			`"kitchen"* OR "remodel"*`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, prepareFTSEntityQuery(tt.in))
+		})
+	}
+}
+
+// TestSearchEntitiesMatchesNaturalLanguageQuestions is the end-to-end
+// regression for the stopword-AND bug: before the prepareFTSEntityQuery
+// fix, asking a conversational question like "what's the status of the
+// kitchen project?" produced zero results because every word had to
+// match. Now the content words OR-match and the kitchen project
+// surfaces.
+func TestSearchEntitiesMatchesNaturalLanguageQuestions(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	types, _ := store.ProjectTypes()
+	require.NoError(t, store.CreateProject(&Project{
+		Title:         "Kitchen Remodel",
+		ProjectTypeID: types[0].ID,
+		Status:        ProjectStatusInProgress,
+	}))
+
+	for _, q := range []string{
+		"what's the status of the kitchen project?",
+		"how's the kitchen going",
+		"kitchen",
+	} {
+		t.Run(q, func(t *testing.T) {
+			results, err := store.SearchEntities(q)
+			require.NoError(t, err)
+			require.NotEmpty(t, results, "expected a match for %q", q)
+			assert.Equal(t, "Kitchen Remodel", results[0].EntityName)
+		})
+	}
+}
+
+// TestSearchEntitiesStopwordOnlyQueryReturnsEmpty covers the fast
+// path where every user token is a stopword. The expected behavior
+// is "no results" rather than "match everything".
+func TestSearchEntitiesStopwordOnlyQueryReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	types, _ := store.ProjectTypes()
+	require.NoError(t, store.CreateProject(&Project{
+		Title:         "Kitchen Remodel",
+		ProjectTypeID: types[0].ID,
+		Status:        ProjectStatusInProgress,
+	}))
+
+	results, err := store.SearchEntities("what is the")
+	require.NoError(t, err)
+	assert.Empty(t, results, "stopword-only query must not match every row")
 }
 
 func TestRebuildFTSIndex(t *testing.T) {
@@ -923,37 +1015,205 @@ func TestFTSTriggerCascadeOnProjectSoftDelete(t *testing.T) {
 	assert.Empty(t, attic, "soft-deleted project title should not surface via any entity")
 }
 
-func TestFTSTriggerHardDeleteMaintenanceCascadesSLE(t *testing.T) {
+// ---------------------------------------------------------------------------
+// Per-type quota and rank threshold tests (ftsEntityKPerType,
+// ftsEntityRankCeiling, ftsEntityTotalCap).
+// ---------------------------------------------------------------------------
+
+func TestFTSSearchEntitiesPerTypeQuotaGuaranteesRepresentation(t *testing.T) {
 	t.Parallel()
 	store := newTestStore(t)
 
+	// Insert many projects that all share a strong matching token. With
+	// no per-type quota, the lone matching vendor below would drop off
+	// the bottom as projects dominate the top of the ranking. The quota
+	// guarantees at least one vendor slot; remaining space is still
+	// filled from the global top.
+	types, _ := store.ProjectTypes()
+	const projectCount = 10
+	for i := range projectCount {
+		require.NoError(t, store.CreateProject(&Project{
+			Title:         fmt.Sprintf("Sawmill Project %d", i),
+			ProjectTypeID: types[0].ID,
+			Status:        ProjectStatusPlanned,
+		}))
+	}
+
+	// Single vendor matching the same token. Without the quota this
+	// would be at rank position 11 behind all 10 projects; with the
+	// quota tier 1 forces it into the result set.
+	require.NoError(t, store.CreateVendor(&Vendor{Name: "Sawmill Supplies Co"}))
+
+	results, err := store.SearchEntities("sawmill")
+	require.NoError(t, err)
+
+	var vendorHits int
+	for _, r := range results {
+		if r.EntityType == DeletionEntityVendor {
+			vendorHits++
+		}
+	}
+	assert.Equal(t, 1, vendorHits,
+		"vendor must survive the project flood thanks to the per-type quota; got %d", vendorHits)
+	assert.LessOrEqual(t, len(results), ftsEntityTotalCap,
+		"total cap must still hold")
+}
+
+func TestFTSSearchEntitiesTotalCap(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	// Insert many entities across multiple types so (ftsEntityKPerType *
+	// number_of_types) > ftsEntityTotalCap. The overall LIMIT must still
+	// apply.
+	types, _ := store.ProjectTypes()
+	for i := range ftsEntityKPerType + 2 {
+		require.NoError(t, store.CreateProject(&Project{
+			Title:         fmt.Sprintf("Overflow Project %d", i),
+			ProjectTypeID: types[0].ID,
+			Status:        ProjectStatusPlanned,
+		}))
+	}
+	for i := range ftsEntityKPerType + 2 {
+		require.NoError(t, store.CreateVendor(&Vendor{
+			Name: fmt.Sprintf("Overflow Vendor %d", i),
+		}))
+	}
+	for i := range ftsEntityKPerType + 2 {
+		require.NoError(t, store.CreateAppliance(&Appliance{
+			Name: fmt.Sprintf("Overflow Appliance %d", i),
+		}))
+	}
+	for i := range ftsEntityKPerType + 2 {
+		require.NoError(t, store.CreateIncident(&Incident{
+			Title:    fmt.Sprintf("Overflow Incident %d", i),
+			Status:   "open",
+			Severity: "low",
+		}))
+	}
+
+	results, err := store.SearchEntities("overflow")
+	require.NoError(t, err)
+	assert.LessOrEqual(t, len(results), ftsEntityTotalCap,
+		"total cap should limit results to %d; got %d", ftsEntityTotalCap, len(results))
+}
+
+func TestFTSSearchEntitiesSingleTypeUsesFullCap(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	// Insert more projects than the per-type quota, with NO other type
+	// matching. The earlier flat-quota implementation would clip at
+	// ftsEntityKPerType even though 15 other slots were unused; the
+	// two-tier implementation should fill up to ftsEntityTotalCap.
+	types, _ := store.ProjectTypes()
+	const projectCount = ftsEntityKPerType + 3
+	for i := range projectCount {
+		require.NoError(t, store.CreateProject(&Project{
+			Title:         fmt.Sprintf("Lakeside Project %d", i),
+			ProjectTypeID: types[0].ID,
+			Status:        ProjectStatusPlanned,
+		}))
+	}
+
+	results, err := store.SearchEntities("lakeside")
+	require.NoError(t, err)
+	assert.GreaterOrEqual(
+		t,
+		len(results),
+		projectCount,
+		"single-type search must not be capped at ftsEntityKPerType when no other type competes; got %d",
+		len(results),
+	)
+	assert.LessOrEqual(t, len(results), ftsEntityTotalCap,
+		"total cap should still apply")
+}
+
+func TestFTSSearchEntitiesTiebreakerIsDeterministic(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	// Insert several projects with identical text so BM25 assigns them
+	// all the same rank. Run the search twice and assert results come
+	// back in the same order -- the window ORDER BY has an entity_id
+	// tiebreaker to guarantee this.
+	types, _ := store.ProjectTypes()
+	const count = ftsEntityKPerType + 2
+	for i := range count {
+		require.NoError(t, store.CreateProject(&Project{
+			Title:         fmt.Sprintf("Identical Widget %d", i),
+			ProjectTypeID: types[0].ID,
+			Status:        ProjectStatusPlanned,
+		}))
+	}
+
+	first, err := store.SearchEntities("widget")
+	require.NoError(t, err)
+	require.NotEmpty(t, first)
+	second, err := store.SearchEntities("widget")
+	require.NoError(t, err)
+	require.Equal(t, len(first), len(second), "same query should return same count")
+	for i := range first {
+		assert.Equal(t, first[i].EntityID, second[i].EntityID,
+			"position %d should be stable across runs", i)
+	}
+}
+
+func TestFTSSearchEntitiesRepresentsEveryMatchingType(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	// Insert enough entities per type that each type's match count
+	// would otherwise exceed the per-type quota, so the tier-3 fill
+	// has a chance to shadow late types. With the "one row per matching
+	// type first" tier, every matching type should still surface.
+	types, _ := store.ProjectTypes()
 	cats, err := store.MaintenanceCategories()
 	require.NoError(t, err)
 	require.NotEmpty(t, cats)
 
-	m := &MaintenanceItem{
-		Name:           "Gutter Cleaning",
-		CategoryID:     cats[0].ID,
-		IntervalMonths: 12,
+	const perType = ftsEntityKPerType + 3
+	for i := range perType {
+		require.NoError(t, store.CreateProject(&Project{
+			Title:         fmt.Sprintf("Signal Project %d", i),
+			ProjectTypeID: types[0].ID,
+			Status:        ProjectStatusPlanned,
+		}))
+		require.NoError(t, store.CreateVendor(&Vendor{
+			Name: fmt.Sprintf("Signal Vendor %d", i),
+		}))
+		require.NoError(t, store.CreateAppliance(&Appliance{
+			Name: fmt.Sprintf("Signal Appliance %d", i),
+		}))
+		require.NoError(t, store.CreateMaintenance(&MaintenanceItem{
+			Name:           fmt.Sprintf("Signal Maintenance %d", i),
+			CategoryID:     cats[0].ID,
+			IntervalMonths: 6,
+		}))
+		require.NoError(t, store.CreateIncident(&Incident{
+			Title:    fmt.Sprintf("Signal Incident %d", i),
+			Status:   "open",
+			Severity: "low",
+		}))
 	}
-	require.NoError(t, store.CreateMaintenance(m))
 
-	sle := &ServiceLogEntry{
-		MaintenanceItemID: m.ID,
-		ServicedAt:        time.Now(),
-		Notes:             "fall cleanup",
+	results, err := store.SearchEntities("signal")
+	require.NoError(t, err)
+
+	seen := map[string]bool{}
+	for _, r := range results {
+		seen[r.EntityType] = true
 	}
-	require.NoError(t, store.CreateServiceLog(sle, Vendor{}))
-
-	require.NoError(t, store.HardDeleteMaintenance(m.ID))
-
-	gutterResults, err := store.SearchEntities("gutter")
-	require.NoError(t, err)
-	assert.Empty(t, gutterResults, "maintenance item FTS row should be gone after hard delete")
-
-	fallResults, err := store.SearchEntities("fall")
-	require.NoError(t, err)
-	assert.Empty(t, fallResults, "child SLE FTS row should be gone via FK cascade + _ad trigger")
+	for _, entity := range []string{
+		DeletionEntityProject,
+		DeletionEntityVendor,
+		DeletionEntityAppliance,
+		DeletionEntityMaintenance,
+		DeletionEntityIncident,
+	} {
+		assert.True(t, seen[entity],
+			"every matching type must appear at least once; %s missing", entity)
+	}
 }
 
 func TestFTSPopulateFiltersSoftDeletedMaintenanceInSLEJoin(t *testing.T) {
@@ -1038,4 +1298,59 @@ func TestFTSPopulateFiltersSoftDeletedParentsInQuoteJoin(t *testing.T) {
 				"initial rebuild must not carry soft-deleted project title into quote FTS")
 		}
 	}
+}
+
+func TestFTSSearchEntitiesRankThresholdFiltersAboveCeiling(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	// Prove the rank threshold infrastructure works: insert a vendor with
+	// a known searchable name, then verify that every returned row has
+	// `rank < ftsEntityRankCeiling`. The initial ceiling is permissive
+	// (0.0) — every BM25 match is negative, so every result passes. Once
+	// the eval tightens the ceiling, this test continues to hold.
+	require.NoError(t, store.CreateVendor(&Vendor{Name: "Rank Threshold Test Co"}))
+
+	results, err := store.SearchEntities("threshold")
+	require.NoError(t, err)
+	require.NotEmpty(t, results, "vendor name should match")
+
+	for _, r := range results {
+		assert.Less(t, r.Rank, ftsEntityRankCeiling,
+			"every returned row must have rank < %v; got %q with rank %v",
+			ftsEntityRankCeiling, r.EntityName, r.Rank)
+	}
+}
+
+func TestFTSTriggerHardDeleteMaintenanceCascadesSLE(t *testing.T) {
+	t.Parallel()
+	store := newTestStore(t)
+
+	cats, err := store.MaintenanceCategories()
+	require.NoError(t, err)
+	require.NotEmpty(t, cats)
+
+	m := &MaintenanceItem{
+		Name:           "Gutter Cleaning",
+		CategoryID:     cats[0].ID,
+		IntervalMonths: 12,
+	}
+	require.NoError(t, store.CreateMaintenance(m))
+
+	sle := &ServiceLogEntry{
+		MaintenanceItemID: m.ID,
+		ServicedAt:        time.Now(),
+		Notes:             "fall cleanup",
+	}
+	require.NoError(t, store.CreateServiceLog(sle, Vendor{}))
+
+	require.NoError(t, store.HardDeleteMaintenance(m.ID))
+
+	gutterResults, err := store.SearchEntities("gutter")
+	require.NoError(t, err)
+	assert.Empty(t, gutterResults, "maintenance item FTS row should be gone after hard delete")
+
+	fallResults, err := store.SearchEntities("fall")
+	require.NoError(t, err)
+	assert.Empty(t, fallResults, "child SLE FTS row should be gone via FK cascade + _ad trigger")
 }
